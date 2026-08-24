@@ -1,0 +1,58 @@
+# Tool configuration for the ingest Lambda code. This repository is not a
+# Python package: the Lambda is zipped straight from src/ingest_lambda, so
+# only [tool.*] sections live here.
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src/ingest_lambda", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # pyflakes
+  "I",   # isort
+  "N",   # pep8-naming
+  "UP",  # pyupgrade
+  "B",   # bugbear
+  "SIM", # simplify
+  "RUF", # ruff-specific
+  "D",   # pydocstyle (Google convention)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests document themselves through their names.
+"tests/*" = ["D"]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+  "alerts",
+  "cold_store",
+  "config",
+  "contract",
+  "handler",
+  "metrics",
+  "persistence",
+  "risk",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/ingest_lambda"]
+
+# boto3/botocore ship no inline types.
+[[tool.mypy.overrides]]
+module = ["boto3.*", "botocore.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Tests import the Lambda modules exactly as the runtime does: as
+# top-level modules at the zip root.
+pythonpath = ["src/ingest_lambda"]
+addopts = "-q"
