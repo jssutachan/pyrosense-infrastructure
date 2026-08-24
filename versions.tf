@@ -6,12 +6,13 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
-    archive = {
-      source  = "hashicorp/archive"
-      version = "~> 2.4"
-    }
+  #Remove the commentary once the Lambda is ready to be ziped.
+   # archive = {
+    #  source  = "hashicorp/archive"
+     # version = "~> 2.4"
+    #}
   }
 
   # Partial backend configuration: account-specific values live in a
