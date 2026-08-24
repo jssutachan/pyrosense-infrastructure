@@ -1,0 +1,55 @@
+# Local quality gate. Install once with: pre-commit install
+# The same checks run in CI, because this hook is bypassable with --no-verify.
+#
+# Required binaries on PATH: terraform, tflint, trivy
+# Pin revisions with: pre-commit autoupdate
+
+repos:
+  # ---------------------------------------------------------------- basics
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: detect-private-key
+      - id: no-commit-to-branch
+
+  # --------------------------------------------------------------- secrets
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  # ------------------------------------------------------------- terraform
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.105.0
+    hooks:
+      - id: terraform_fmt
+
+      - id: terraform_validate
+        args:
+          - --init-args=-backend=false
+
+      - id: terraform_tflint
+        args:
+          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+
+      - id: terraform_trivy
+        args:
+          - --args=--severity=HIGH,CRITICAL
+
+  # ---------------------------------------------------------------- python
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.4
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
