@@ -30,7 +30,7 @@ repos:
 
   # ------------------------------------------------------------- terraform
   - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.105.0
+    rev: v1.109.0
     hooks:
       - id: terraform_fmt
 

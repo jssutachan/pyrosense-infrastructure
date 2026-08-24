@@ -8,10 +8,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
-  #Remove the commentary once the Lambda is ready to be ziped.
-   # archive = {
+    #Remove the commentary once the Lambda is ready to be zipped.
+    # archive = {
     #  source  = "hashicorp/archive"
-     # version = "~> 2.4"
+    # version = "~> 2.4"
     #}
   }
 
@@ -20,6 +20,6 @@ terraform {
   # environment-specific is hardcoded in the codebase.
   #   terraform init -backend-config=config/backend.hcl
   #Remove the comment once the backend is being worked on
- # backend "s3" {}
-#
+  # backend "s3" {}
+  #
 }
