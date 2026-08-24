@@ -18,5 +18,7 @@ terraform {
   # backend config file (see config/backend.hcl.example) so nothing
   # environment-specific is hardcoded in the codebase.
   #   terraform init -backend-config=config/backend.hcl
-  backend "s3" {}
+  #Remove the comment once the backend is being worked on
+ # backend "s3" {}
+#
 }
