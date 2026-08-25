@@ -1,0 +1,13 @@
+# Template for config/backend.hcl, which is gitignored.
+#
+#   cp config/backend.hcl.example config/backend.hcl
+#   # replace <ACCOUNT_ID> with your AWS account ID
+#   make tf-init
+#
+# The bucket is created by the bootstrap root before this backend can be used.
+
+bucket       = "pyrosense-tfstate-<ACCOUNT_ID>"
+key          = "pyrosense/terraform.tfstate"
+region       = "us-east-1"
+encrypt      = true
+use_lockfile = true
