@@ -24,9 +24,11 @@ help: ## Show this help
 ## ------------------------------------------------------------------- setup
 
 tools: ## Verify the required tools are installed
-	@for t in terraform tflint trivy pre-commit gitleaks; do \
-		command -v $$t >/dev/null 2>&1 || { echo "missing: $$t"; exit 1; }; \
-	done
+	@missing=""; \
+	for t in terraform tflint trivy pre-commit gitleaks; do \
+		command -v $$t >/dev/null 2>&1 || missing="$$missing $$t"; \
+	done; \
+	if [ -n "$$missing" ]; then echo "missing:$$missing"; exit 1; fi
 	@echo "all tools present:"
 	@terraform version | head -1
 	@tflint --version | head -1
@@ -45,13 +47,11 @@ update-hooks: ## Bump pre-commit hook revisions (produces a reviewable diff)
 
 ## ------------------------------------------------------------- quality gate
 
-fmt: ## Format Terraform and Python code in place
+fmt: ## Format Terraform code in place
 	terraform fmt -recursive
-	ruff format src tests
 
 fmt-check: ## Verify formatting without modifying any file
 	terraform fmt -check -recursive
-	ruff format --check src tests
 
 init: ## Initialise every Terraform root without touching the backend
 	terraform init -backend=false
@@ -72,6 +72,12 @@ sec: ## Scan for misconfigurations and hardcoded secrets
 	trivy config --severity HIGH,CRITICAL .
 	gitleaks detect --no-git --redact
 
+check: fmt-check validate lint sec ## Run the full gate
+
+## ------------------------------------------------------------------ python
+# Not part of `check` yet: src/ and tests/ hold no Python code.
+# ruff, mypy and pytest join the gate with the ingest Lambda.
+
 py-lint: ## Lint Python
 	ruff check src tests
 
@@ -80,8 +86,6 @@ py-type: ## Type-check Python
 
 py-test: ## Run the Python test suite
 	pytest
-
-check: fmt-check validate lint sec py-lint py-type py-test ## Run the full gate
 
 ## -------------------------------------------------------------- terraform ops
 
