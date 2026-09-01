@@ -9,8 +9,7 @@ TFVARS         ?= demo.tfvars
 BACKEND_CONFIG := config/backend.hcl
 
 # Additional Terraform roots validated alongside the main one.
-# Populated in step 2, when the state backend root is created.
-BOOTSTRAP_ROOTS :=
+BOOTSTRAP_ROOTS := bootstrap/state-backend
 
 .DEFAULT_GOAL := help
 

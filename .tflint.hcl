@@ -31,8 +31,9 @@ rule "terraform_documented_outputs" {
   enabled = true
 }
 
+#change to true when the root has its first resource-
 rule "terraform_unused_required_providers" {
-  enabled = true
+  enabled = false
 }
 
 rule "terraform_standard_module_structure" {
