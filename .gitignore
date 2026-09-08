@@ -17,6 +17,8 @@ override.tf.json
 .terraformrc
 terraform.rc
 config/backend.hcl
+*.tfvars
+!*.tfvars.example
 
 # =====================================================================
 # Python (Lambdas + tooling)

@@ -1,0 +1,10 @@
+# Demo environment values. Copy to demo.tfvars (gitignored) and set a real
+# ops email. This .example is the committed template.
+#
+# Omitted on purpose — they use their defaults in variables.tf:
+#   aws_region      -> "us-east-1"
+#   resource_prefix -> "pyrosense"
+
+environment      = "demo"
+budget_limit_usd = 10
+ops_emails       = ["you@example.com"]

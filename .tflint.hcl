@@ -31,9 +31,8 @@ rule "terraform_documented_outputs" {
   enabled = true
 }
 
-#change to true when the root has its first resource-
 rule "terraform_unused_required_providers" {
-  enabled = false
+  enabled = true
 }
 
 rule "terraform_standard_module_structure" {
@@ -45,7 +44,20 @@ rule "terraform_naming_convention" {
   format  = "snake_case"
 }
 
+# Disabled: with a root-level default_tags strategy, this rule can't see the
+# tags across the module boundary — it lints each module in isolation, where
+# no provider (hence no default_tags) exists, and reports a false positive on
+# every resource. Replaced by aws_provider_missing_default_tags below, which
+# verifies the tag contract where it actually lives: the provider. See ADR-000X.
 rule "aws_resource_missing_tags" {
+  enabled = false
+  tags    = ["Project", "Environment", "ManagedBy"]
+}
+
+# Enforces the real tag contract: the aws provider must declare default_tags
+# with these keys. Runs where the provider block lives (root + bootstrap),
+# which is exactly where tflint can read it.
+rule "aws_provider_missing_default_tags" {
   enabled = true
   tags    = ["Project", "Environment", "ManagedBy"]
 }

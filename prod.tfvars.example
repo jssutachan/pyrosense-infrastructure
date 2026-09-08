@@ -1,0 +1,10 @@
+# Production values — design target only; this project never deploys prod
+# Copy to prod.tfvars (gitignored) to use.
+#
+# Omitted on purpose — defaults in variables.tf:
+#   aws_region      -> "us-east-1"
+#   resource_prefix -> "pyrosense"
+
+environment      = "prod"
+budget_limit_usd = 5000
+ops_emails       = ["ops@example.com"]
