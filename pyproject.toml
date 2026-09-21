@@ -33,11 +33,13 @@ known-first-party = [
   "alerts",
   "cold_store",
   "config",
+  "conftest",
   "contract",
   "handler",
   "metrics",
   "persistence",
   "risk",
+  "structured_logging",
 ]
 
 [tool.mypy]
@@ -56,3 +58,19 @@ testpaths = ["tests"]
 # top-level modules at the zip root.
 pythonpath = ["src/ingest_lambda"]
 addopts = "-q"
+
+# --- Coverage (added: gates the CI at 90% branch coverage) ---
+
+[tool.coverage.run]
+branch = true
+source = ["src/ingest_lambda"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 90
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+]

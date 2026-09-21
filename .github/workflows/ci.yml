@@ -1,0 +1,84 @@
+# CI — quality gates for the PyroSense ingest Lambda (Python).
+#
+# Runs on every push and pull request that touches the Python project.
+# Three gates must pass: lint+format (ruff), static types (mypy), and
+# tests+coverage (pytest). A failure blocks the merge when branch
+# protection is enabled on the target branch.
+#
+# Action versions verified 2026-09-18. Pinned to major tags so patch and
+# minor updates arrive automatically; bump the major deliberately (a new
+# major can change the Node runtime the action uses).
+
+name: CI
+
+# When does this pipeline run?
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "src/ingest_lambda/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "requirements-dev.txt"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "src/ingest_lambda/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "requirements-dev.txt"
+      - ".github/workflows/ci.yml"
+
+# Least privilege: this pipeline only reads the repository. It cannot push,
+# comment or touch anything else — the security pillar, applied to CI.
+permissions:
+  contents: read
+
+# If you push twice quickly, cancel the older run: don't burn CI minutes on
+# a commit nobody is waiting for anymore (FinOps, applied to CI).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, type-check and test
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Get the code onto the runner.
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      # 2. Install the Python version that matches the Lambda runtime, and
+      #    cache pip downloads so repeat runs are faster (and cheaper).
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements-dev.txt
+
+      # 3. Install the dev tooling (never shipped to Lambda).
+      - name: Install dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      # 4. Gate 1 — lint: catch bugs and style violations.
+      - name: Lint (ruff)
+        run: ruff check .
+
+      # 5. Gate 2 — format: fail if code is not formatted, don't reformat it.
+      - name: Format check (ruff)
+        run: ruff format --check .
+
+      # 6. Gate 3 — static types: mypy in strict mode over the source.
+      - name: Type-check (mypy)
+        run: mypy
+
+      # 7. Gate 4 — tests + coverage. pyproject's fail_under=90 makes low
+      #    coverage fail the build, not just report a number.
+      - name: Test with coverage (pytest)
+        run: pytest --cov --cov-report=term-missing
