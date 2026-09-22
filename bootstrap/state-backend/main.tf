@@ -30,9 +30,24 @@ provider "aws" {
 
 data "aws_caller_identity" "current" {}
 
-# Access logging deliberately omitted: only Terraform touches this bucket,
-# and a logging target would need yet another bootstrap bucket.
-# (Low-severity in Trivy; add #trivy:ignore:<ID> only if your gate flags it.)
+# S3 server access logging is deliberately disabled on the state bucket.
+#
+# This bucket has exactly one consumer — Terraform, run from the operator's
+# workstation — and CloudTrail already records S3 API calls at the account
+# level, attributed to the calling identity. Direct anonymous access is
+# impossible: full Public Access Block below, plus a bucket policy denying any
+# request where aws:SecureTransport is false.
+#
+# Enabling access logging would require a second bucket, which would itself
+# trigger the same rule; the recursion has no terminating case that adds real
+# auditing value at this scale.
+#
+# Confirmed against trivy 0.71.2 on 2026-09-22 (rule AWS-0089, "Bucket has
+# logging disabled").
+# Revisit if: the state bucket gains consumers beyond Terraform, a CI runner
+# assumes a deploy role against it, or an audit requirement mandates
+# object-level access records.
+#trivy:ignore:AVD-AWS-0089
 resource "aws_s3_bucket" "state" {
   bucket = "pyrosense-tfstate-${data.aws_caller_identity.current.account_id}"
 
@@ -60,8 +75,12 @@ resource "aws_s3_bucket_versioning" "state" {
 
 # SSE-S3, not a CMK: this stack bootstraps the account before any project
 # CMK exists, and state must stay readable even if the pipeline key is
-# ever scheduled for deletion.
-# Confirm the ID with `trivy config` before trusting this suppression.
+# ever scheduled for deletion (ADR-0001).
+#
+# Confirmed against trivy 0.71.2 on 2026-09-22: the suppression matches rule
+# aws-s3-encryption-customer-key, as reported by the scanner's "Ignore finding"
+# output. Revisit in a high-compliance context that requires key-level access
+# control and CloudTrail auditing of state bucket encryption.
 #trivy:ignore:AVD-AWS-0132
 resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
   bucket = aws_s3_bucket.state.id

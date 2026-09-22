@@ -21,13 +21,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remote state backend (`bootstrap/state-backend`): a versioned, SSE-S3
   encrypted, TLS-only S3 bucket with native lockfile locking and 90-day
   noncurrent-version expiry. (ADR-0001)
-- Root module composition: the `budgets` module wiring, root inputs
-  (`resource_prefix`, `budget_limit_usd`, `ops_emails`), a `name_prefix`
-  local, and a re-exported `budget_arn` output.
+- Root module composition: the `budgets` and `security` module wiring, root
+  inputs (`resource_prefix`, `budget_limit_usd`, `ops_emails`,
+  `kms_deletion_window_days`), a `name_prefix` local, and re-exported
+  `budget_arn`, `budget_name`, `kms_key_arn` and `kms_alias_name` outputs.
 - `modules/budgets`: account-wide monthly cost budget (FinOps guardrail).
   ACTUAL and FORECASTED email alerts; measures gross consumption
   (`include_credit = false`) so free-tier credits do not mask spend.
   Monitoring-only, `$0` cost. (ADR-0003)
+- `modules/security`: the single customer-managed KMS key encrypting every
+  component that stores data at rest (SQS + DLQ, DynamoDB, S3, SNS, CloudWatch
+  Logs), plus its alias. Symmetric, single-region, annual rotation. The key
+  policy carries four statements: IAM delegation for services calling KMS with
+  the caller's credentials, and one statement each for the CloudWatch Logs,
+  CloudWatch Alarms and SNS service principals, which have no IAM identity and
+  can only be authorized in the key policy. The Logs grant is constrained by
+  `ArnLike` on the log-group encryption context. (ADR-0010)
+- `trivy.yaml`: committed scanner configuration excluding `.venv`, `.terraform`
+  and `.git`, so local runs and CI scan the same tree.
 - `demo.tfvars.example` / `prod.tfvars.example` templates for the two
   deployment scenarios. (ADR-0002)
 - Ingest core Lambda (`src/ingest_lambda/`, Python 3.12): the only component
@@ -58,13 +69,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   concurrency cancel-in-progress, path-filtered to the Python project, and
   pinned to Python 3.12 to match the runtime.
 - Component documentation: `src/ingest_lambda/README.md` (modules, design
-  invariants, packaging) and `tests/README.md` (how to run, fixtures,
-  conventions).
-- ADR-0005 — Contract-first re-validation at the consumer boundary.
-- ADR-0006 — At-least-once delivery handled by idempotent conditional writes.
+  invariants, packaging), `tests/README.md` (how to run, fixtures, conventions),
+  `modules/budgets/README.md` and `modules/security/README.md`.
+- ADR-0005 — Alert suppression: race-free slot, claimed before publishing.
+- ADR-0006 — Contract-first re-validation at the consumer boundary.
 - ADR-0007 — Dependency-free Lambda (standard library only).
-- ADR-0008 — Observability: JSON logs on stderr, EMF metrics on stdout.
-- ADR-0009 — Alert suppression: race-free slot, claimed before publishing.
+- ADR-0008 — At-least-once delivery handled by idempotent conditional writes.
+- ADR-0009 — Observability: JSON logs on stderr, EMF metrics on stdout.
+- ADR-0010 — A single customer-managed KMS key for the whole pipeline.
 
 ### Changed
 
@@ -74,6 +86,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `aws_provider_missing_default_tags`, which validates the provider's
   `default_tags` where TFLint can read it, instead of each resource across
   the module boundary. (ADR-0004)
+- Corrected the ADR references in this file: entries 0005 through 0009 were
+  mapped to the wrong decisions, and the four-digit numbering now matches the
+  filenames under `docs/adr/`.
 - Root `README.md`: corrected the repository structure to match the actual
   layout, added the SQS buffer to the reference architecture diagram, aligned
   the ADR list and quality gate, and added a Python test quickstart (requires
@@ -87,6 +102,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of an unclassified `TypeError`; identifier patterns use `re.fullmatch` so a
   trailing newline can no longer pass. `config` now names the offending
   environment variable when a numeric value fails to parse.
+- Trivy no longer scans `.venv`, which was being parsed as CloudFormation and
+  produced 16 spurious targets per run.
 
 ### Security
 
@@ -97,3 +114,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI runs with least-privilege permissions (`contents: read` only) and never
   vendors third-party packages into the Lambda deployment artifact, keeping the
   runtime CVE surface minimal.
+- Encryption at rest is centralized on one customer-managed KMS key, whose
+  policy is the only surface on which the CloudWatch Logs, CloudWatch Alarms
+  and SNS service principals can be authorized. AWS-managed keys cannot carry
+  those grants, which would leave alarm delivery silently broken. (ADR-0010)
+- Both Trivy suppressions in `bootstrap/state-backend` were confirmed to match
+  their intended rules and now carry a rationale and a revisit trigger inline.

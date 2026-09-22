@@ -1,4 +1,4 @@
-# ADR — Observability: JSON logs on stderr, EMF metrics on stdout
+# ADR 0009 — Observability: JSON logs on stderr, EMF metrics on stdout
 
 > **Number:** assign the next in your `docs/` sequence.
 > **Status:** Accepted · 2026-09-21

@@ -6,7 +6,9 @@
 *.tfstate.*
 crash.log
 crash.*.log
+tfplan
 *.tfplan
+*.tfplan.*
 *.tfvars
 *.tfvars.json
 override.tf
@@ -17,7 +19,6 @@ override.tf.json
 .terraformrc
 terraform.rc
 config/backend.hcl
-*.tfvars
 !*.tfvars.example
 
 # =====================================================================
@@ -70,3 +71,5 @@ docs/AI-Context*
 *~
 .DS_Store
 Thumbs.db
+#*#
+*~

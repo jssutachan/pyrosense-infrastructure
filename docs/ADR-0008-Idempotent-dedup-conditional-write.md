@@ -1,4 +1,4 @@
-# ADR — At-least-once delivery handled by idempotent conditional writes
+# ADR 0008 — At-least-once delivery handled by idempotent conditional writes
 
 > **Number:** assign the next in your `docs/` sequence.
 > **Status:** Accepted · 2026-09-21

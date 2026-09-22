@@ -1,4 +1,4 @@
-# ADR — Alert suppression: race-free slot, claimed before publishing
+# ADR 0005 — Alert suppression: race-free slot, claimed before publishing
 
 > **Number:** assign the next in your `docs/` sequence.
 > **Status:** Accepted · 2026-09-21

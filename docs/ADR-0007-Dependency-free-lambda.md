@@ -1,4 +1,4 @@
-# ADR — Dependency-free Lambda (standard library only)
+# ADR 0007 — Dependency-free Lambda (standard library only)
 
 > **Number:** assign the next in your `docs/` sequence.
 > **Status:** Accepted · 2026-09-21

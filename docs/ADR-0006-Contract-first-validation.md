@@ -1,4 +1,4 @@
-# ADR — Contract-first re-validation at the consumer boundary
+# ADR 0006 — Contract-first re-validation at the consumer boundary
 
 > **Number:** assign the next in your `docs/` sequence.
 > **Status:** Accepted · 2026-09-21

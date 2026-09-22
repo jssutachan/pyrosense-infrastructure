@@ -69,6 +69,7 @@ lint: ## Lint Terraform with TFLint
 
 sec: ## Scan for misconfigurations and hardcoded secrets
 	trivy config --severity HIGH,CRITICAL .
+	trivy config . --tf-vars demo.tfvars
 	gitleaks detect --no-git --redact
 
 check: fmt-check validate lint sec ## Run the full gate
