@@ -1,0 +1,35 @@
+# ==============================================================================
+# prod.tfvars — design target. NEVER APPLIED.
+#
+# GITIGNORED, for symmetry with demo.tfvars; it holds no real secrets.
+#
+# Per ADR-0002, this file exists so the production intent behind each value is
+# auditable at a glance: the diff between this file and demo.tfvars IS the
+# demo/production delta, and that diff is part of what the portfolio
+# demonstrates. It is never passed to apply.
+# ==============================================================================
+
+# Omitted on purpose — these use their defaults in variables.tf:
+#   aws_region      -> "us-east-1"
+#   resource_prefix -> "pyrosense"
+
+environment = "prod"
+
+# --- FinOps guardrail (modules/budgets, ADR-0003) -----------------------------
+
+# Sized for a real deployment: continuous telemetry from a deployed sensor
+# fleet, permanent S3 retention and production-grade DynamoDB capacity. This is
+# a monitoring threshold, not a spend commitment.
+budget_limit_usd = 5000
+
+# Placeholder. In a real deployment this is an institutional distribution list
+# owned by the operations team, not an individual mailbox: alerts must survive
+# staff turnover.
+ops_emails = ["you@example.com"]
+
+# --- Encryption (modules/security, ADR-0010) ----------------------------------
+
+# AWS maximum. Scheduling this key for deletion makes every object in S3, every
+# item in DynamoDB and every queued message permanently unreadable. 30 days is
+# the widest window available to notice the mistake and cancel it.
+kms_deletion_window_days = 30

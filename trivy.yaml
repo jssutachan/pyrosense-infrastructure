@@ -1,0 +1,8 @@
+# Trivy configuration for pyrosense-infrastructure.
+# Committed so local runs and CI scan the same tree with the same rules.
+
+scan:
+  skip-dirs:
+    - .venv
+    - .terraform
+    - .git

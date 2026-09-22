@@ -1,0 +1,17 @@
+# Development-time dependencies for the PyroSense ingest Lambda.
+#
+# These are NEVER packaged into the deployment zip — the Lambda runtime
+# ships only the standard library plus the AWS SDK it already provides.
+# Install into a virtual environment: see README.md.
+#
+# Versions verified 2026-09-18 against PyPI. Compatible-release specifiers
+# (~=) allow patch/minor updates while pinning the major line, so a
+# `pip install` stays reproducible without freezing you on a stale patch.
+
+pytest~=9.1
+pytest-cov~=7.1
+moto[all]~=5.2
+boto3~=1.43           # matches the Lambda runtime SDK; dev-only here
+ruff~=0.16
+mypy~=2.3
+boto3-stubs[dynamodb,s3,sns]~=1.43

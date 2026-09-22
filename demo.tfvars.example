@@ -1,0 +1,42 @@
+# ==============================================================================
+# demo.tfvars — the only environment this project actually deploys.
+#
+# GITIGNORED. Contains a real address (PII, standard #11). The committed
+# template is demo.tfvars.example.
+#
+# Per ADR-0002 ("design for production, deploy for demo"), this file is the
+# entire difference between demo and production. Architecture, modules and
+# resource definitions are identical; only the values below change. Keep it
+# minimal: every line here is a claim that this value legitimately differs
+# between environments. If a value is the same in both, it belongs as a
+# default in variables.tf, not here.
+#
+# Usage: terraform plan -var-file=demo.tfvars -out=tfplan
+# ==============================================================================
+
+# Omitted on purpose — these use their defaults in variables.tf:
+#   aws_region      -> "us-east-1"
+#   resource_prefix -> "pyrosense"
+
+# Drives resource naming (local.name_prefix) and the provider's default_tags.
+environment = "demo"
+
+# --- FinOps guardrail (modules/budgets, ADR-0003) -----------------------------
+
+# Account-wide monthly ceiling. $2 is deliberately tight: the deployment model
+# is turn on, demonstrate, destroy, so sustained spend means something was left
+# running. Credits are excluded (include_credit = false), so this measures gross
+# consumption and still fires while free-tier credits cover the bill.
+# Note: a KMS key left alive for a full month is $1 — half this ceiling, enough
+# to trip the 80% ACTUAL threshold. That is the guardrail working, not a bug.
+budget_limit_usd = 2
+
+# Budget notification recipients. Real address: PII, hence gitignored.
+ops_emails = ["you@example.com"]
+
+# --- Encryption (modules/security, ADR-0010) ----------------------------------
+
+# AWS minimum (valid range 7-30). The demo is torn down after each validation
+# cycle, and a key pending deletion incurs no charge, so the shortest window
+# keeps teardown clean. Production uses 30 — see prod.tfvars.
+kms_deletion_window_days = 7

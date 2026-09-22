@@ -18,8 +18,105 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Makefile` as the single entry point for the gate and Terraform operations.
 - Architecture Decision Record framework under `docs/adr/`.
 - `config/backend.hcl.example` documenting the partial backend configuration.
+- Remote state backend (`bootstrap/state-backend`): a versioned, SSE-S3
+  encrypted, TLS-only S3 bucket with native lockfile locking and 90-day
+  noncurrent-version expiry. (ADR-0001)
+- Root module composition: the `budgets` and `security` module wiring, root
+  inputs (`resource_prefix`, `budget_limit_usd`, `ops_emails`,
+  `kms_deletion_window_days`), a `name_prefix` local, and re-exported
+  `budget_arn`, `budget_name`, `kms_key_arn` and `kms_alias_name` outputs.
+- `modules/budgets`: account-wide monthly cost budget (FinOps guardrail).
+  ACTUAL and FORECASTED email alerts; measures gross consumption
+  (`include_credit = false`) so free-tier credits do not mask spend.
+  Monitoring-only, `$0` cost. (ADR-0003)
+- `modules/security`: the single customer-managed KMS key encrypting every
+  component that stores data at rest (SQS + DLQ, DynamoDB, S3, SNS, CloudWatch
+  Logs), plus its alias. Symmetric, single-region, annual rotation. The key
+  policy carries four statements: IAM delegation for services calling KMS with
+  the caller's credentials, and one statement each for the CloudWatch Logs,
+  CloudWatch Alarms and SNS service principals, which have no IAM identity and
+  can only be authorized in the key policy. The Logs grant is constrained by
+  `ArnLike` on the log-group encryption context. (ADR-0010)
+- `trivy.yaml`: committed scanner configuration excluding `.venv`, `.terraform`
+  and `.git`, so local runs and CI scan the same tree.
+- `demo.tfvars.example` / `prod.tfvars.example` templates for the two
+  deployment scenarios. (ADR-0002)
+- Ingest core Lambda (`src/ingest_lambda/`, Python 3.12): the only component
+  with business logic. Nine standard-library-only modules —
+  `config` (env-driven `Settings`, fail-fast), `contract` (frozen contract v1
+  validation → immutable `TelemetryRecord`), `risk` (pure fire-risk
+  classification with explainable reasons), `persistence` (DynamoDB hot write,
+  conditional-write dedup, TTL), `cold_store` (raw S3 archive, Hive-partitioned
+  deterministic key), `alerts` (SNS publish with race-free per-device
+  suppression), `metrics` (CloudWatch EMF on stdout), `structured_logging`
+  (JSON logs on stderr, whitelisted context fields) and `handler`
+  (SQS batch orchestration with partial batch responses). No runtime
+  dependencies; `boto3` is provided by the Lambda runtime.
+  (ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009)
+- Test suite (`tests/`): 91 pytest tests, ~99% branch coverage, running against
+  an in-memory AWS (moto) — no account, no credentials, no cost. `conftest.py`
+  provisions a fresh DynamoDB/S3/SNS stack per test and wires an SQS queue to
+  the SNS topic to assert on published alerts. Includes regression tests for the
+  three correctness bugs found in review and transient-vs-permanent error-path
+  coverage.
+- Python tooling in `pyproject.toml`: coverage configuration with a 90% branch
+  gate (`[tool.coverage.*]`), alongside the existing Ruff/mypy/pytest config.
+- `requirements-dev.txt`: development-only tooling (never shipped in the Lambda
+  zip), version-pinned with compatible-release specifiers.
+- CI pipeline (`.github/workflows/ci.yml`, GitHub Actions): runs the Python
+  quality gate (Ruff lint + format, mypy, pytest with coverage) on every push
+  and pull request that touches the Lambda. Least-privilege `contents: read`,
+  concurrency cancel-in-progress, path-filtered to the Python project, and
+  pinned to Python 3.12 to match the runtime.
+- Component documentation: `src/ingest_lambda/README.md` (modules, design
+  invariants, packaging), `tests/README.md` (how to run, fixtures, conventions),
+  `modules/budgets/README.md` and `modules/security/README.md`.
+- ADR-0005 — Alert suppression: race-free slot, claimed before publishing.
+- ADR-0006 — Contract-first re-validation at the consumer boundary.
+- ADR-0007 — Dependency-free Lambda (standard library only).
+- ADR-0008 — At-least-once delivery handled by idempotent conditional writes.
+- ADR-0009 — Observability: JSON logs on stderr, EMF metrics on stdout.
+- ADR-0010 — A single customer-managed KMS key for the whole pipeline.
+
+### Changed
+
+- Re-enabled the `terraform_unused_required_providers` TFLint rule now that
+  the root module declares an `aws_*` resource.
+- Tag-linting strategy: replaced `aws_resource_missing_tags` with
+  `aws_provider_missing_default_tags`, which validates the provider's
+  `default_tags` where TFLint can read it, instead of each resource across
+  the module boundary. (ADR-0004)
+- Corrected the ADR references in this file: entries 0005 through 0009 were
+  mapped to the wrong decisions, and the four-digit numbering now matches the
+  filenames under `docs/adr/`.
+- Root `README.md`: corrected the repository structure to match the actual
+  layout, added the SQS buffer to the reference architecture diagram, aligned
+  the ADR list and quality gate, and added a Python test quickstart (requires
+  Python 3.12).
+
+### Fixed
+
+- `contract` validation, from senior review of the AI-drafted ingest core:
+  reject non-finite numbers (`NaN`/`Infinity` previously slipped past range
+  checks); a non-hashable `status` now raises `ContractViolationError` instead
+  of an unclassified `TypeError`; identifier patterns use `re.fullmatch` so a
+  trailing newline can no longer pass. `config` now names the offending
+  environment variable when a numeric value fails to parse.
+- Trivy no longer scans `.venv`, which was being parsed as CloudFormation and
+  produced 16 spurious targets per run.
 
 ### Security
 
-- Backend configuration is excluded from version control: the state bucket name
-  carries the AWS account ID as a suffix.
+- Backend configuration is excluded from version control: the state bucket
+  name carries the AWS account ID as a suffix.
+- Real `*.tfvars` files are gitignored (they carry operator email
+  addresses); only `*.tfvars.example` templates are committed.
+- CI runs with least-privilege permissions (`contents: read` only) and never
+  vendors third-party packages into the Lambda deployment artifact, keeping the
+  runtime CVE surface minimal.
+- Encryption at rest is centralized on one customer-managed KMS key, whose
+  policy is the only surface on which the CloudWatch Logs, CloudWatch Alarms
+  and SNS service principals can be authorized. AWS-managed keys cannot carry
+  those grants, which would leave alarm delivery silently broken. (ADR-0010)
+- Both Trivy suppressions in `bootstrap/state-backend` were confirmed to match
+  their intended rules and now carry a rationale and a revisit trigger inline.

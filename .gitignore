@@ -6,7 +6,9 @@
 *.tfstate.*
 crash.log
 crash.*.log
+tfplan
 *.tfplan
+*.tfplan.*
 *.tfvars
 *.tfvars.json
 override.tf
@@ -17,6 +19,9 @@ override.tf.json
 .terraformrc
 terraform.rc
 config/backend.hcl
+!*.tfvars.example
+# Child modules never use a lock file; only the root configuration's counts.
+modules/**/.terraform.lock.hcl
 
 # =====================================================================
 # Python (Lambdas + tooling)
@@ -68,3 +73,5 @@ docs/AI-Context*
 *~
 .DS_Store
 Thumbs.db
+#*#
+*~
