@@ -20,6 +20,8 @@ override.tf.json
 terraform.rc
 config/backend.hcl
 !*.tfvars.example
+# Child modules never use a lock file; only the root configuration's counts.
+modules/**/.terraform.lock.hcl
 
 # =====================================================================
 # Python (Lambdas + tooling)
