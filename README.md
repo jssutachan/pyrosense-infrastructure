@@ -5,8 +5,9 @@
 
 **Status:** 🚧 Active development — building the `v1.0-serverless` MVP.
 The ingest core (Python Lambda) is complete and fully tested; infrastructure
-wiring is in progress — the FinOps guardrail and the pipeline encryption key
-are deployed and verified.
+wiring is in progress — the FinOps guardrail is deployed, the pipeline
+encryption key has been verified in a deploy/destroy cycle, and the SQS
+messaging module is code complete and pending deployment.
 
 ---
 
@@ -39,7 +40,7 @@ later analysis.
 
 ## Reference architecture
 
-````mermaid
+```mermaid
 flowchart LR
     subgraph Edge["Simulated fleet"]
         S["IoT sensors<br/>(MQTT / X.509)"]
@@ -67,7 +68,7 @@ flowchart LR
     SNS -.->|SSE-KMS| KMS
     S3 -.->|SSE-KMS| KMS
     CW -.->|SSE-KMS| KMS
-````
+```
 
 > The diagram reflects the **target** design; components are added to this repo
 > path by path. See the roadmap for current build status.
@@ -78,8 +79,7 @@ flowchart LR
 > own IAM policy even though the application code never mentions KMS. IoT Core
 > is absent from that group on purpose — its message broker does not persist
 > messages, so there is nothing at rest to encrypt. (ADR-0010)
-````
-````
+
 ---
 
 ## Tech stack
@@ -87,7 +87,7 @@ flowchart LR
 | Layer                | Choice                                                       |
 | -------------------- | ----------------------------------------------------------- |
 | Ingestion            | AWS IoT Core (MQTT, X.509 mutual TLS)                       |
-| Buffering            | Amazon SQS (+ DLQ), partial batch responses                |
+| Buffering            | Amazon SQS standard queue (+ DLQ), SSE-KMS, partial batch responses |
 | Compute              | AWS Lambda (Python 3.12)                                    |
 | Hot state            | Amazon DynamoDB (single-table, TTL)                        |
 | Alerting             | Amazon SNS                                                  |
@@ -99,7 +99,7 @@ flowchart LR
 
 ---
 
-## Demo vs. Production (ADR — design for production, deploy for demo)
+## Demo vs. Production (ADR-0002)
 
 > **"Design for production, deploy for demo."**
 
@@ -123,12 +123,13 @@ ephemerally at near-zero cost. Terraform is parametrized (`demo` / `prod` via
 ├── demo.tfvars prod.tfvars  # per-environment inputs (examples committed)
 ├── bootstrap/               # one-time remote backend (S3 state) setup
 ├── config/                  # backend / shared configuration
-├── docs/adr/                # Documents
+├── docs/
 │   ├── adr/                 # Architecture Decision Records
 │   └── evidence/            # evidence for destroyed resources
 ├── modules/                 # reusable Terraform modules (AWS infra)
 │   ├── budgets/             # account-wide FinOps guardrail
-│   └── security/            # pipeline KMS key + key policy
+│   ├── security/            # pipeline KMS key + key policy
+│   └── messaging/           # SQS ingest queue + DLQ (see its README)
 ├── scripts/                 # helper scripts
 ├── src/
 │   └── ingest_lambda/       # Python 3.12 Lambda source (see its README)
@@ -172,6 +173,8 @@ terraform plan -var-file=demo.tfvars -out=tfplan
 terraform apply tfplan
 ```
 
+> Re-run `terraform init` whenever a new module block is added to `main.tf`.
+
 > Inspect the plan before applying. A green static gate does not prove the plan
 > contains what you expect — verify the artifact itself:
 >
@@ -193,8 +196,8 @@ is tracked in the project log.
 | CI quality gate (Actions)        | ✅ Lint + types + tests on every push |
 | Remote state backend             | ✅ Deployed |
 | FinOps guardrail (budgets)       | ✅ Deployed |
-| Encryption key (KMS)             | ✅ Deployed and verified; runtime use pending `observability` |
-| Messaging (SQS + DLQ)            | 🚧 Next |
+| Encryption key (KMS)             | ✅ Verified in a deploy/destroy cycle |
+| Messaging (SQS + DLQ)            | ✅ Verified in a deploy/destroy cycle |
 | Storage (DynamoDB / S3 / Athena) | ⬜ Planned |
 | Alerting (SNS) end to end        | ⬜ Planned |
 | IoT Core rule → Lambda           | ⬜ Planned |
@@ -219,6 +222,8 @@ Significant decisions are documented as ADRs under `docs/adr/`. Current set:
 | 0008 | At-least-once delivery handled by idempotent conditional writes |
 | 0009 | Observability: JSON logs on stderr, EMF metrics on stdout |
 | 0010 | A single customer-managed KMS key for the whole pipeline |
+| 0011 | Ingest buffer retry contract: consumer-derived visibility timeout, DLQ outlives its source |
+| 0012 | Permanent (contract) failures stay on the SQS retry path |
 
 ---
 
