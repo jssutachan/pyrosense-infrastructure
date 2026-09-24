@@ -25,8 +25,11 @@ Validation:
 - returns an **immutable, typed `TelemetryRecord`** — the trust boundary: raw
   dict in, trusted object out.
 
-A contract violation is a **permanent** failure and is routed to the DLQ; it is
-never retried.
+A contract violation is a **permanent** failure: no retry can fix it. The
+handler reports it in `batchItemFailures` like any other failure, so SQS
+retries it until `maxReceiveCount` (5, ADR-0011) and then moves it to the DLQ,
+preserving the payload as evidence. Those retries are known waste; whether to
+remove them is a separate decision (candidate ADR-0012).
 
 ## Rationale
 
@@ -43,6 +46,10 @@ silently dropped. Accumulating errors makes the 3 a.m. log actionable in one rea
   hides producer bugs and fabricates data; better to reject and preserve evidence.
 - **Fail on first error** → **rejected**: forces fix-retry-fix cycles; batching
   all errors is cheaper to debug.
+- **FIFO queues with exactly-once** → **rejected**: the IoT Core SQS rule
+  action does not support FIFO queues, which rules them out for this
+  pipeline; throughput limits and cost would weigh against them anyway.
+  Idempotency is the portable, transport-agnostic solution.
 
 ## Consequences
 

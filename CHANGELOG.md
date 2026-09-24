@@ -37,6 +37,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CloudWatch Alarms and SNS service principals, which have no IAM identity and
   can only be authorized in the key policy. The Logs grant is constrained by
   `ArnLike` on the log-group encryption context. (ADR-0010)
+- `modules/messaging`: standard SQS ingest queue and dead-letter queue, the
+  buffer between IoT Core and the ingest Lambda. Both queues use SSE-KMS with
+  the pipeline key, relying on the existing IAM delegation statement (no key
+  policy change). The visibility timeout is derived from the consumer's
+  settings (6 × function timeout + batching window) rather than configured.
+  Retention is 4 days on the source and 14 days on the DLQ, guarded by a
+  `precondition` because standard queues keep the original enqueue timestamp.
+  `maxReceiveCount = 5`. The redrive contract is enforced on both sides
+  (`aws_sqs_queue_redrive_policy` plus a `byQueue` redrive allow policy).
+  (ADR-0008, ADR-0010)
+- Root module: `messaging` wiring; `ingest_lambda_timeout_seconds` and
+  `ingest_batching_window_seconds` locals as the single source of the consumer
+  settings shared by `messaging` and the future `ingest` module; re-exported
+  `ingest_queue_url`, `ingest_queue_arn`, `ingest_dlq_url` and
+  `ingest_dlq_arn` outputs. No new root inputs.
 - `trivy.yaml`: committed scanner configuration excluding `.venv`, `.terraform`
   and `.git`, so local runs and CI scan the same tree.
 - `demo.tfvars.example` / `prod.tfvars.example` templates for the two
@@ -70,13 +85,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pinned to Python 3.12 to match the runtime.
 - Component documentation: `src/ingest_lambda/README.md` (modules, design
   invariants, packaging), `tests/README.md` (how to run, fixtures, conventions),
-  `modules/budgets/README.md` and `modules/security/README.md`.
+  `modules/budgets/README.md`, `modules/security/README.md` and
+  `modules/messaging/README.md` (design decisions, IAM contract for the
+  producer and consumer roles, KMS cost model, plan and runtime verification).
 - ADR-0005 — Alert suppression: race-free slot, claimed before publishing.
 - ADR-0006 — Contract-first re-validation at the consumer boundary.
 - ADR-0007 — Dependency-free Lambda (standard library only).
 - ADR-0008 — At-least-once delivery handled by idempotent conditional writes.
 - ADR-0009 — Observability: JSON logs on stderr, EMF metrics on stdout.
 - ADR-0010 — A single customer-managed KMS key for the whole pipeline.
+- ADR-0011 — Ingest buffer retry contract: consumer-derived visibility timeout
+  and a DLQ that outlives its source.
+- ADR-0012 — Permanent (contract) failures stay on the SQS retry path; the DLQ
+  is never redriven blindly.
 
 ### Changed
 
@@ -93,6 +114,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   layout, added the SQS buffer to the reference architecture diagram, aligned
   the ADR list and quality gate, and added a Python test quickstart (requires
   Python 3.12).
+- Root `README.md`: added `modules/messaging` to the repository structure and
+  roadmap, referenced ADR-0002 by number, and restated the KMS key status as
+  verified in a deploy/destroy cycle with runtime use still pending.
 
 ### Fixed
 
@@ -104,6 +128,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   environment variable when a numeric value fails to parse.
 - Trivy no longer scans `.venv`, which was being parsed as CloudFormation and
   produced 16 spurious targets per run.
+- Root `README.md`: removed a stray empty code fence after the architecture
+  notes, and corrected the `docs/` tree, which showed `adr/` nested inside
+  `docs/adr/`.
+- ADR-0006 claimed contract violations are "never retried"; they are retried
+  until `maxReceiveCount` and then moved to the DLQ. Corrected to match the
+  handler. ADR-0006 and ADR-0008 had unfilled template number placeholders.
 
 ### Security
 
@@ -120,3 +150,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   those grants, which would leave alarm delivery silently broken. (ADR-0010)
 - Both Trivy suppressions in `bootstrap/state-backend` were confirmed to match
   their intended rules and now carry a rationale and a revisit trigger inline.
+- Ingest queue and DLQ deny every non-TLS request through their queue
+  policies (`aws:SecureTransport = false`), and the DLQ accepts redrives only
+  from the ingest queue (`byQueue`). The queue policies grant no access; all
+  positive access comes from the producer and consumer roles' identity
+  policies.
