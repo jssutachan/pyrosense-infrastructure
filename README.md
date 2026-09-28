@@ -6,8 +6,9 @@
 **Status:** 🚧 Active development — building the `v1.0-serverless` MVP.
 The ingest core (Python Lambda) is complete and fully tested; infrastructure
 wiring is in progress — the FinOps guardrail is deployed, the pipeline
-encryption key has been verified in a deploy/destroy cycle, and the SQS
-messaging module is code complete and pending deployment.
+encryption key and the SQS messaging module have been verified in
+deploy/destroy cycles, and the storage module (DynamoDB hot table + S3 raw
+archive) is code complete and pending deployment.
 
 ---
 
@@ -89,9 +90,9 @@ flowchart LR
 | Ingestion            | AWS IoT Core (MQTT, X.509 mutual TLS)                       |
 | Buffering            | Amazon SQS standard queue (+ DLQ), SSE-KMS, partial batch responses |
 | Compute              | AWS Lambda (Python 3.12)                                    |
-| Hot state            | Amazon DynamoDB (single-table, TTL)                        |
+| Hot state            | Amazon DynamoDB (single-table, TTL, PITR, SSE-KMS)          |
 | Alerting             | Amazon SNS                                                  |
-| Cold storage / query | Amazon S3 + Amazon Athena                                  |
+| Cold storage / query | Amazon S3 (SSE-KMS + bucket key, versioned) + Amazon Athena (planned) |
 | Observability        | Amazon CloudWatch (structured logs, EMF metrics, alarms)   |
 | IaC                  | Terraform (remote S3 backend, native state locking)        |
 | CI/CD                | GitHub Actions                                              |
@@ -129,7 +130,8 @@ ephemerally at near-zero cost. Terraform is parametrized (`demo` / `prod` via
 ├── modules/                 # reusable Terraform modules (AWS infra)
 │   ├── budgets/             # account-wide FinOps guardrail
 │   ├── security/            # pipeline KMS key + key policy
-│   └── messaging/           # SQS ingest queue + DLQ (see its README)
+│   ├── messaging/           # SQS ingest queue + DLQ (see its README)
+│   └── storage/             # DynamoDB hot table + S3 raw archive (see its README)
 ├── scripts/                 # helper scripts
 ├── src/
 │   └── ingest_lambda/       # Python 3.12 Lambda source (see its README)
@@ -198,11 +200,12 @@ is tracked in the project log.
 | FinOps guardrail (budgets)       | ✅ Deployed |
 | Encryption key (KMS)             | ✅ Verified in a deploy/destroy cycle |
 | Messaging (SQS + DLQ)            | ✅ Verified in a deploy/destroy cycle |
-| Storage (DynamoDB / S3 / Athena) | ⬜ Planned |
+| Storage (DynamoDB + S3)          | 🟡 Code complete, pending deployment |
 | Alerting (SNS) end to end        | ⬜ Planned |
 | IoT Core rule → Lambda           | ⬜ Planned |
 | Observability (alarms, dashboard)| ⬜ Planned |
 | Terraform CI workflow + OIDC     | ⬜ Planned |
+| Historical analysis (Athena)     | ⬜ Planned |
 
 ---
 
@@ -224,6 +227,7 @@ Significant decisions are documented as ADRs under `docs/adr/`. Current set:
 | 0010 | A single customer-managed KMS key for the whole pipeline |
 | 0011 | Ingest buffer retry contract: consumer-derived visibility timeout, DLQ outlives its source |
 | 0012 | Permanent (contract) failures stay on the SQS retry path |
+| 0013 | Storage: single-table key design and a flat (non-tiered) cold archive |
 
 ---
 

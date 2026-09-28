@@ -52,6 +52,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   settings shared by `messaging` and the future `ingest` module; re-exported
   `ingest_queue_url`, `ingest_queue_arn`, `ingest_dlq_url` and
   `ingest_dlq_arn` outputs. No new root inputs.
+  - `modules/storage`: the hot/cold persistence split. A DynamoDB table
+  (`<prefix>-hot`) with generic `pk`/`sk` string keys shared by two item
+  families — telemetry (`DEV#<device_id>` / `SEQ#<seq>`) and the
+  alert-suppression slot (`ALERT#<device_id>` / `STATE`) — mirroring the
+  approved Python exactly; on-demand, TTL on `expires_at`, point-in-time
+  recovery always on (35 days), SSE with the pipeline key. An S3 bucket
+  (`<prefix>-cold-<account_id>`) archiving every raw message: SSE-KMS with an
+  S3 Bucket Key, SSE-C blocked, versioning, all public access blocked, and a
+  single hygiene lifecycle rule (noncurrent versions after 30 days, orphan
+  delete markers, incomplete multipart uploads after 7 days). No storage-class
+  transitions: per-message objects are under the 128 KB lifecycle floor and
+  would cost more in IA or Glacier. Outputs include `telemetry_objects_arn` so
+  the ingest role's `s3:PutObject` is scoped to `telemetry/*` without
+  re-typing the prefix. (ADR-0008, ADR-0010, ADR-0013)
+- Root module: `storage` wiring; `allow_data_destruction` input (default
+  `false`, cross-variable validation rejecting `true` for `prod`), driving
+  DynamoDB deletion protection and S3 `force_destroy` together; re-exported
+  `hot_table_name`, `hot_table_arn`, `cold_bucket_id` and `cold_bucket_arn`
+  outputs.
 - `trivy.yaml`: committed scanner configuration excluding `.venv`, `.terraform`
   and `.git`, so local runs and CI scan the same tree.
 - `demo.tfvars.example` / `prod.tfvars.example` templates for the two
@@ -85,8 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pinned to Python 3.12 to match the runtime.
 - Component documentation: `src/ingest_lambda/README.md` (modules, design
   invariants, packaging), `tests/README.md` (how to run, fixtures, conventions),
-  `modules/budgets/README.md`, `modules/security/README.md` and
-  `modules/messaging/README.md` (design decisions, IAM contract for the
+  `modules/budgets/README.md`, `modules/security/README.md`,`modules/messaging/README.md` and `modules/storage/README.md` (design decisions, IAM contract for the
   producer and consumer roles, KMS cost model, plan and runtime verification).
 - ADR-0005 — Alert suppression: race-free slot, claimed before publishing.
 - ADR-0006 — Contract-first re-validation at the consumer boundary.
@@ -98,6 +116,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a DLQ that outlives its source.
 - ADR-0012 — Permanent (contract) failures stay on the SQS retry path; the DLQ
   is never redriven blindly.
+- ADR-0013 — Storage: single-table key design and a flat (non-tiered) cold
+  archive.
+- Root `README.md`: added `modules/storage` to the repository structure,
+  roadmap and ADR index; split Athena into its own roadmap row; corrected the
+  status paragraph, which still described messaging as pending deployment.
+- `demo.tfvars.example` / `prod.tfvars.example`: added
+  `allow_data_destruction` (`true` for the demo cycle, `false` for prod).
 
 ### Changed
 
@@ -155,3 +180,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the ingest queue (`byQueue`). The queue policies grant no access; all
   positive access comes from the producer and consumer roles' identity
   policies.
+- The cold-storage bucket denies every non-TLS request
+  (`aws:SecureTransport = false`), blocks all public access, blocks SSE-C
+  uploads and grants nothing in its bucket policy; all positive access comes
+  from the ingest role. The hot table and the bucket are protected against
+  `terraform destroy` in production (deletion protection on, `force_destroy`
+  off), enforced by a root validation rather than by convention.

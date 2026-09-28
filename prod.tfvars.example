@@ -33,3 +33,13 @@ ops_emails = ["you@example.com"]
 # item in DynamoDB and every queued message permanently unreadable. 30 days is
 # the widest window available to notice the mistake and cancel it.
 kms_deletion_window_days = 30
+
+
+# --- Data lifecycle (modules/storage, ADR-0013) -------------------------------
+
+# Explicit although it equals the default: this file documents production
+# intent. false keeps DynamoDB deletion protection on and S3 force_destroy
+# off, so destroy fails on a table or a bucket that holds data. Deleting prod
+# data takes two deliberate steps (flip, apply, then destroy), and the root
+# variable rejects true for prod at plan time anyway.
+allow_data_destruction = false
