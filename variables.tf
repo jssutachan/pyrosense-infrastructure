@@ -77,3 +77,25 @@ variable "kms_deletion_window_days" {
     error_message = "kms_deletion_window_days must be between 7 and 30 inclusive (AWS KMS limit)."
   }
 }
+
+# ------------------------------------------------------------------------------
+# Data lifecycle — consumed by module.storage (ADR-0013)
+# ------------------------------------------------------------------------------
+
+variable "allow_data_destruction" {
+  description = "Whether `terraform destroy` may delete stored data: true disables DynamoDB deletion protection and enables S3 force_destroy. Demo only (apply -> evidence -> destroy cycle, ADR-0002); must be false in production (ADR-0013)."
+  type        = bool
+
+  # Defaults to the production-safe value, same rule as
+  # kms_deletion_window_days: an apply without a -var-file must never
+  # produce a data store that destroy can wipe.
+  default = false
+
+  # Cross-variable rule (Terraform >= 1.9, and required_version is 1.11):
+  # the one combination that must never exist. A copy-paste slip in
+  # prod.tfvars fails at plan instead of at the first destroy.
+  validation {
+    condition     = !(var.environment == "prod" && var.allow_data_destruction)
+    error_message = "allow_data_destruction must be false when environment is 'prod'."
+  }
+}

@@ -8,6 +8,7 @@ variable-named error.
 
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass
 
@@ -66,34 +67,46 @@ class Settings:
                 raise RuntimeError(f"Missing required environment variable: {name}")
             return value
 
-        def require_float(name: str) -> float:
+        def require_float(name: str, *, minimum: float) -> float:
             raw = require(name)
             try:
-                return float(raw)
+                value = float(raw)
             except ValueError as exc:
                 raise RuntimeError(
                     f"Environment variable {name} must be a number, got {raw!r}"
                 ) from exc
+            # float() accepts 'inf' and 'nan'. A non-finite threshold silently
+            # disables detection: no reading ever compares greater than inf, and
+            # every comparison with nan is False.
+            if not math.isfinite(value) or value < minimum:
+                raise RuntimeError(
+                    f"Environment variable {name} must be a finite number >= {minimum}, got {raw!r}"
+                )
+            return value
 
-        def require_int(name: str) -> int:
+        def require_int(name: str, *, minimum: int, maximum: int | None = None) -> int:
             raw = require(name)
             try:
-                return int(raw)
+                value = int(raw)
             except ValueError as exc:
                 raise RuntimeError(
                     f"Environment variable {name} must be an integer, got {raw!r}"
                 ) from exc
+            if value < minimum or (maximum is not None and value > maximum):
+                bound = f"{minimum}..{maximum}" if maximum is not None else f">= {minimum}"
+                raise RuntimeError(f"Environment variable {name} must be {bound}, got {raw!r}")
+            return value
 
         return cls(
             environment=require("ENVIRONMENT"),
             table_name=require("TABLE_NAME"),
             bucket_name=require("BUCKET_NAME"),
             alert_topic_arn=require("ALERT_TOPIC_ARN"),
-            smoke_alert_ppm=require_float("SMOKE_ALERT_PPM"),
-            temp_alert_c=require_float("TEMP_ALERT_C"),
-            rh_alert_pct=require_float("RH_ALERT_PCT"),
-            hot_retention_days=require_int("HOT_RETENTION_DAYS"),
-            alert_suppression_minutes=require_int("ALERT_SUPPRESSION_MINUTES"),
+            smoke_alert_ppm=require_float("SMOKE_ALERT_PPM", minimum=0.0),
+            temp_alert_c=require_float("TEMP_ALERT_C", minimum=-20.0),
+            rh_alert_pct=require_float("RH_ALERT_PCT", minimum=0.0),
+            hot_retention_days=require_int("HOT_RETENTION_DAYS", minimum=14),
+            alert_suppression_minutes=require_int("ALERT_SUPPRESSION_MINUTES", minimum=1),
             metrics_namespace=os.environ.get("METRICS_NAMESPACE", "PyroSense/Ingest"),
             log_level=os.environ.get("LOG_LEVEL", "INFO"),
         )

@@ -40,3 +40,14 @@ ops_emails = ["you@example.com"]
 # cycle, and a key pending deletion incurs no charge, so the shortest window
 # keeps teardown clean. Production uses 30 — see prod.tfvars.
 kms_deletion_window_days = 7
+
+
+# --- Data lifecycle (modules/storage, ADR-0013) -------------------------------
+
+# The demo cycle is apply -> evidence -> destroy. true turns DynamoDB deletion
+# protection off and S3 force_destroy on, so destroy can remove a table and a
+# bucket that still hold data (including noncurrent object versions).
+# force_destroy only acts once it is in state: it must be applied before the
+# destroy that relies on it — which is always the case here, since it is set
+# from the first apply.
+allow_data_destruction = true

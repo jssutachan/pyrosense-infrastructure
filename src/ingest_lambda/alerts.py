@@ -35,6 +35,12 @@ ALERT_SK = "STATE"
 #: SNS subjects are limited to 100 characters.
 _MAX_SUBJECT = 100
 
+#: The slot must outlive its own suppression window. Derived from the
+#: window instead of fixed, so no configuration can make TTL delete a slot
+#: that is still suppressing (the same rule as the SQS visibility timeout,
+#: ADR-0011).
+_SLOT_TTL_MARGIN_SECONDS = 86_400
+
 
 def try_acquire_alert_slot(
     table: Any,
@@ -67,8 +73,7 @@ def try_acquire_alert_slot(
                 "pk": ALERT_PK.format(device_id=device_id),
                 "sk": ALERT_SK,
                 "suppress_until": suppress_until,
-                # TTL cleanup well after the window closes.
-                "expires_at": int((now + timedelta(days=1)).timestamp()),
+                "expires_at": suppress_until + _SLOT_TTL_MARGIN_SECONDS,
             },
             ConditionExpression="attribute_not_exists(pk) OR suppress_until < :now",
             ExpressionAttributeValues={":now": int(now.timestamp())},

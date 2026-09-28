@@ -85,3 +85,25 @@ module "messaging" {
   consumer_timeout_seconds         = local.ingest_lambda_timeout_seconds
   consumer_batching_window_seconds = local.ingest_batching_window_seconds
 }
+
+
+# ------------------------------------------------------------------------------
+# Hot/cold persistence: DynamoDB + S3 (ADR-0008, ADR-0013)
+# ------------------------------------------------------------------------------
+
+# DynamoDB single-table (dedup guard + alert-suppression slot) and the raw S3
+# archive. The key schema mirrors persistence.py, alerts.py and cold_store.py
+# exactly; the module only declares it. Ordered after security by the
+# kms_key_arn reference, like messaging.
+#
+# allow_data_destruction is one intent driving two mechanisms (DynamoDB
+# deletion protection and S3 force_destroy), so an environment can never be
+# half-protected.
+module "storage" {
+  source = "./modules/storage"
+
+  name_prefix = local.name_prefix
+  kms_key_arn = module.security.kms_key_arn
+
+  allow_data_destruction = var.allow_data_destruction
+}

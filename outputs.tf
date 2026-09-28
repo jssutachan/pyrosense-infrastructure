@@ -67,3 +67,34 @@ output "ingest_dlq_arn" {
   description = "ARN of the ingest dead-letter queue. Must appear as deadLetterTargetArn in the ingest queue's RedrivePolicy."
   value       = module.messaging.dlq_arn
 }
+
+
+# ------------------------------------------------------------------------------
+# module.storage (ADR-0013)
+#
+# Names because the CLI verification takes them: `aws dynamodb ...
+# --table-name` and `aws s3api ... --bucket`. ARNs because the ingest IAM
+# policy is scoped to them and a reviewer checks it against these values.
+# telemetry_objects_arn is not re-exported: its only consumer (ingest) reads
+# it module-to-module, and no CLI command takes an object-ARN pattern.
+# ------------------------------------------------------------------------------
+
+output "hot_table_name" {
+  description = "Name of the hot-store DynamoDB table, for AWS CLI verification (--table-name)."
+  value       = module.storage.table_name
+}
+
+output "hot_table_arn" {
+  description = "ARN of the hot-store DynamoDB table. The ingest role's dynamodb:PutItem must be scoped to it."
+  value       = module.storage.table_arn
+}
+
+output "cold_bucket_id" {
+  description = "Name of the cold-store S3 bucket, for AWS CLI verification (--bucket)."
+  value       = module.storage.bucket_id
+}
+
+output "cold_bucket_arn" {
+  description = "ARN of the cold-store S3 bucket. With bucket keys enabled it is also the KMS encryption context, so the ingest role's KMS conditions reference it."
+  value       = module.storage.bucket_arn
+}
