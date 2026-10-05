@@ -46,7 +46,7 @@ module "budgets" {
 
   name_prefix         = local.name_prefix
   limit_usd           = var.budget_limit_usd
-  notification_emails = var.ops_emails
+  notification_emails = values(var.ops_recipients)
 
   # include_credits, actual_threshold_percents and forecasted_threshold_percent
   # are omitted on purpose — the module's own defaults cover them.
@@ -106,4 +106,28 @@ module "storage" {
   kms_key_arn = module.security.kms_key_arn
 
   allow_data_destruction = var.allow_data_destruction
+}
+
+# ------------------------------------------------------------------------------
+# Notification layer: SNS fire-risk alerts + operational alarms (ADR-0014, ADR-0015)
+# ------------------------------------------------------------------------------
+
+# Two topics with two different publishers. The fire topic is published by the
+# ingest Lambda through its IAM role; the ops topic by CloudWatch Alarms as a
+# service principal, which has no IAM identity and can only be authorized in
+# the topic policy. That difference is why the module writes two topics out
+# instead of taking a flag (ADR-0014).
+#
+# Ordered after security by the kms_key_arn reference, like messaging and
+# storage. Email subscriptions stay pending until each recipient confirms;
+# Terraform cannot confirm them, so pending subscriptions after apply are
+# expected and not a failed apply (ADR-0015).
+module "alerting" {
+  source = "./modules/alerting"
+
+  name_prefix = local.name_prefix
+  kms_key_arn = module.security.kms_key_arn
+
+  fire_alert_recipients = var.fire_alert_recipients
+  ops_recipients        = var.ops_recipients
 }

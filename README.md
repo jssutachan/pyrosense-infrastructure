@@ -6,9 +6,10 @@
 **Status:** 🚧 Active development — building the `v1.0-serverless` MVP.
 The ingest core (Python Lambda) is complete and fully tested; infrastructure
 wiring is in progress — the FinOps guardrail is deployed, the pipeline
-encryption key and the SQS messaging module have been verified in
-deploy/destroy cycles, and the storage module (DynamoDB hot table + S3 raw
-archive) is code complete and pending deployment.
+encryption key, the SQS messaging module and the storage module (DynamoDB hot
+table + S3 raw archive) have been verified in deploy/destroy cycles, and the
+alerting module (SNS fire-risk and operations topics) is code complete and
+pending deployment.
 
 ---
 
@@ -131,7 +132,8 @@ ephemerally at near-zero cost. Terraform is parametrized (`demo` / `prod` via
 │   ├── budgets/             # account-wide FinOps guardrail
 │   ├── security/            # pipeline KMS key + key policy
 │   ├── messaging/           # SQS ingest queue + DLQ (see its README)
-│   └── storage/             # DynamoDB hot table + S3 raw archive (see its README)
+│   ├── storage/             # DynamoDB hot table + S3 raw archive (see its README)
+│   └── alerting/            # SNS fire-risk + operations topics (see its README)
 ├── scripts/                 # helper scripts
 ├── src/
 │   └── ingest_lambda/       # Python 3.12 Lambda source (see its README)
@@ -200,9 +202,9 @@ is tracked in the project log.
 | FinOps guardrail (budgets)       | ✅ Deployed |
 | Encryption key (KMS)             | ✅ Verified in a deploy/destroy cycle |
 | Messaging (SQS + DLQ)            | ✅ Verified in a deploy/destroy cycle |
-| Storage (DynamoDB + S3)          | 🟡 Code complete, pending deployment |
-| Alerting (SNS) end to end        | ⬜ Planned |
-| IoT Core rule → Lambda           | ⬜ Planned |
+| Storage (DynamoDB + S3)          | ✅ Verified in a deploy/destroy cycle |
+| Alerting (SNS) end to end        | ✅ Verified in a deploy/destroy cycle |
+| IoT Core rule → SQS → Lambda     | ⬜ Planned |
 | Observability (alarms, dashboard)| ⬜ Planned |
 | Terraform CI workflow + OIDC     | ⬜ Planned |
 | Historical analysis (Athena)     | ⬜ Planned |
@@ -228,6 +230,8 @@ Significant decisions are documented as ADRs under `docs/adr/`. Current set:
 | 0011 | Ingest buffer retry contract: consumer-derived visibility timeout, DLQ outlives its source |
 | 0012 | Permanent (contract) failures stay on the SQS retry path |
 | 0013 | Storage: single-table key design and a flat (non-tiered) cold archive |
+| 0014 | Alerting: one module with two purpose-built topics, keyed by recipient labels |
+| 0015 | Email as the only alert channel in v1.0, scoped as non-life-safety |
 
 ---
 

@@ -98,3 +98,26 @@ output "cold_bucket_arn" {
   description = "ARN of the cold-store S3 bucket. With bucket keys enabled it is also the KMS encryption context, so the ingest role's KMS conditions reference it."
   value       = module.storage.bucket_arn
 }
+
+# ------------------------------------------------------------------------------
+# module.alerting (ADR-0014, ADR-0015)
+#
+# ARNs only. Every SNS CLI call (get-topic-attributes, publish,
+# list-subscriptions-by-topic) takes --topic-arn, and both consumers want the
+# ARN too: ingest reads the fire topic ARN as ALERT_TOPIC_ARN, observability
+# puts the ops topic ARN in alarm_actions. Topic names are not re-exported:
+# they are the last segment of the ARN and their only consumer
+# (observability, as the TopicName metric dimension) reads them
+# module-to-module. Subscriptions are never exported — their endpoints are
+# email addresses (PII, standard #11).
+# ------------------------------------------------------------------------------
+
+output "alerts_topic_arn" {
+  description = "ARN of the fire-risk alert topic. The ingest Lambda reads it as ALERT_TOPIC_ARN and its role's sns:Publish must be scoped to it."
+  value       = module.alerting.fire_alerts_topic_arn
+}
+
+output "ops_topic_arn" {
+  description = "ARN of the operational alarm topic. Observability references it in alarm_actions / ok_actions; only alarms in this account and region may publish to it."
+  value       = module.alerting.ops_topic_arn
+}
