@@ -31,8 +31,23 @@ environment = "demo"
 # to trip the 80% ACTUAL threshold. That is the guardrail working, not a bug.
 budget_limit_usd = 2
 
-# Budget notification recipients. Real address: PII, hence gitignored.
-ops_emails = ["you@example.com"]
+# --- Notification recipients (modules/budgets + modules/alerting, ADR-0014) ---
+
+# Maps of { label = email }. The label is what shows up in plans and resource
+# addresses; the address never does. The real file carries a real mailbox: PII,
+# hence gitignored.
+#
+# In demo both maps point at the same mailbox — one person is both the operator
+# and the responder. They are still two separate subscriptions on two separate
+# topics, and each one needs its own confirmation email. In production these
+# are different institutions (see prod.tfvars.example).
+ops_recipients = {
+  "operator" = "you@example.org"
+}
+
+fire_alert_recipients = {
+  "duty-desk" = "you@example.org"
+}
 
 # --- Encryption (modules/security, ADR-0010) ----------------------------------
 

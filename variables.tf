@@ -12,8 +12,9 @@
 # ------------------------------------------------------------------------------
 # Deployment context
 #
-# NOTE: aws_region and environment are consumed by providers.tf (region and
-# default_tags), not by main.tf — that is why they look "unused" in this file.
+# NOTE: aws_region is consumed only by providers.tf (region). environment is
+# consumed three times: providers.tf (default_tags), main.tf (local.name_prefix)
+# and the cross-variable validation on allow_data_destruction below.
 # ------------------------------------------------------------------------------
 
 variable "aws_region" {
@@ -52,9 +53,33 @@ variable "budget_limit_usd" {
   type        = number
 }
 
-variable "ops_emails" {
-  description = "Recipients for budget alerts. At least one required (enforced in the budgets module)."
-  type        = list(string)
+# ------------------------------------------------------------------------------
+# Notification recipients — consumed by module.budgets and module.alerting
+# (ADR-0003, ADR-0014)
+#
+# Maps of { label = email }, not lists of addresses. Terraform always discloses
+# for_each keys in resource addresses, so alerting keys its subscriptions by
+# label: "pyrosense-demo-fire-alerts" subscriptions read
+# aws_sns_topic_subscription.fire_alerts["duty-desk"], never an address. Labels
+# also keep the keys stable — removing one recipient destroys exactly that one
+# subscription instead of shifting the rest.
+#
+# Both are sensitive and neither has a default: an address is PII (standard
+# #11), and there is no safe fallback recipient. Running plan without a
+# -var-file fails, which is the conservative outcome. Validated in
+# module.alerting (shape, label format, address format, no duplicates).
+# ------------------------------------------------------------------------------
+
+variable "ops_recipients" {
+  description = "Platform operators, as { label = email }. Receive budget notifications (module.budgets) and CloudWatch alarm notifications (module.alerting ops topic). One intent, one input: these are the people who run the platform."
+  type        = map(string)
+  sensitive   = true
+}
+
+variable "fire_alert_recipients" {
+  description = "Fire-risk alert responders, as { label = email }. A different audience from ops_recipients: in production these are duty desks at the responding institutions, not the platform team. Receive the CRITICAL alerts published by the ingest Lambda."
+  type        = map(string)
+  sensitive   = true
 }
 
 # ------------------------------------------------------------------------------

@@ -22,10 +22,24 @@ environment = "prod"
 # a monitoring threshold, not a spend commitment.
 budget_limit_usd = 5000
 
-# Placeholder. In a real deployment this is an institutional distribution list
-# owned by the operations team, not an individual mailbox: alerts must survive
-# staff turnover.
-ops_emails = ["you@example.com"]
+# --- Notification recipients (modules/budgets + modules/alerting, ADR-0014) ---
+
+# Placeholders. In a real deployment these are institutional distribution lists
+# owned by their teams, not individual mailboxes: alerts must survive staff
+# turnover.
+#
+# The two maps are the production reason the topics are separate. Operators get
+# budget and CloudWatch alarm notifications — platform health. Responders get
+# CRITICAL fire alerts carrying device coordinates. A duty desk at Bomberos has
+# no business receiving a DLQ-depth alarm, and the platform team should not be
+# the path a fire alert travels through.
+ops_recipients = {
+  "platform-oncall" = "pyrosense-ops@example.org"
+}
+
+fire_alert_recipients = {
+  "bomberos-duty-desk" = "pyrosense-fire-duty@example.org"
+}
 
 # --- Encryption (modules/security, ADR-0010) ----------------------------------
 

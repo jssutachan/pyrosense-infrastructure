@@ -52,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   settings shared by `messaging` and the future `ingest` module; re-exported
   `ingest_queue_url`, `ingest_queue_arn`, `ingest_dlq_url` and
   `ingest_dlq_arn` outputs. No new root inputs.
-  - `modules/storage`: the hot/cold persistence split. A DynamoDB table
+- `modules/storage`: the hot/cold persistence split. A DynamoDB table
   (`<prefix>-hot`) with generic `pk`/`sk` string keys shared by two item
   families — telemetry (`DEV#<device_id>` / `SEQ#<seq>`) and the
   alert-suppression slot (`ALERT#<device_id>` / `STATE`) — mirroring the
@@ -123,6 +123,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   status paragraph, which still described messaging as pending deployment.
 - `demo.tfvars.example` / `prod.tfvars.example`: added
   `allow_data_destruction` (`true` for the demo cycle, `false` for prod).
+- `modules/alerting`: the notification layer, two KMS-encrypted SNS standard
+  topics with email subscriptions. The fire-risk topic is published by the
+  ingest Lambda through its IAM role; the operations topic by CloudWatch Alarms
+  as a service principal. They are written out as two topics rather than one
+  generic module instantiated twice because that difference in publisher is the
+  whole design: `aws_sns_topic_policy` replaces a topic's default policy, and a
+  service principal has no IAM identity to fall back on, so the ops topic
+  carries an explicit CloudWatch statement scoped to this account and to alarm
+  ARNs in this region, while the fire topic carries only the TLS deny. Both
+  topics are standard, not FIFO, stated explicitly because `alerts.py` sends no
+  MessageGroupId and FIFO topics cannot deliver to email at all. Subscriptions
+  are keyed by recipient label, never by address. (ADR-0014, ADR-0015)
+- Root module: `alerting` wiring; `ops_recipients` and `fire_alert_recipients`
+  inputs (sensitive maps of label to address); re-exported `alerts_topic_arn`
+  and `ops_topic_arn` outputs.
+- ADR-0014 — Alerting: one module with two purpose-built topics, keyed by
+  recipient labels.
+- ADR-0015 — Email as the only alert channel in v1.0, scoped as non-life-safety.
+- Root `README.md`: added `modules/alerting` to the repository structure,
+  roadmap and ADR index.
 
 ### Changed
 
@@ -142,6 +162,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Root `README.md`: added `modules/messaging` to the repository structure and
   roadmap, referenced ADR-0002 by number, and restated the KMS key status as
   verified in a deploy/destroy cycle with runtime use still pending.
+- **Breaking (tfvars):** the root input `ops_emails` (list of addresses) is
+  replaced by `ops_recipients`, a sensitive map of label to address, and joined
+  by `fire_alert_recipients` in the same shape. Terraform discloses `for_each`
+  keys in resource addresses, so a list of addresses would print PII in every
+  plan and CI log; labels keep the addresses out of the graph and keep the keys
+  stable when a recipient is added or removed. `module.budgets` now receives
+  `values(var.ops_recipients)` and is otherwise untouched — one intent ("who
+  operates the platform"), one input. Real `demo.tfvars` and `prod.tfvars` must
+  be updated before the next plan. (ADR-0014)
 
 ### Fixed
 
@@ -186,3 +215,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the ingest role. The hot table and the bucket are protected against
   `terraform destroy` in production (deletion protection on, `force_destroy`
   off), enforced by a root validation rather than by convention.
+- Both alert topics are encrypted with the pipeline key and deny every non-TLS
+  publish. Neither topic policy grants anything to a wildcard principal: the
+  ingest Lambda is authorized through its own IAM policy, and CloudWatch only
+  on the operations topic, constrained by `aws:SourceAccount` and an `ArnLike`
+  condition on alarm ARNs in this account and region. The fire-risk payload
+  carries device coordinates, which is why that topic is CMK-encrypted and
+  subscribable by nobody outside the account.
+- Recipient email addresses never reach an output, a resource address or a
+  `for_each` key. They remain in state in clear text, as Terraform stores every
+  value, and `terraform show -json` prints them: `tfplan` and `tfplan.json`
+  stay out of version control.

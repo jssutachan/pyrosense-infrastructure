@@ -2,14 +2,24 @@
 #
 # Required tools (see README for installation):
 #   terraform >= 1.11   tflint >= 0.50   trivy   pre-commit   gitleaks
+#   Python 3.12 with requirements-dev.txt installed (ruff, mypy, pytest)
 #
-# `make check` runs exactly what CI runs: verification only, no file changes.
+# `make check` is the full local gate: verification only, no file changes.
+# CI runs its Python half today; the Terraform half joins CI with the
+# Terraform workflow.
 
 TFVARS         ?= demo.tfvars
 BACKEND_CONFIG := config/backend.hcl
 
 # Additional Terraform roots validated alongside the main one.
 BOOTSTRAP_ROOTS := bootstrap/state-backend
+
+# Python tools come from the project virtualenv when it exists (local runs,
+# no need to activate it first) and from PATH otherwise (CI installs them into
+# the runner's Python). Calling the executables directly avoids relying on
+# `source .venv/bin/activate` having been run in the current shell.
+VENV   ?= .venv
+PY_BIN := $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/,)
 
 .DEFAULT_GOAL := help
 
@@ -27,12 +37,16 @@ tools: ## Verify the required tools are installed
 	for t in terraform tflint trivy pre-commit gitleaks; do \
 		command -v $$t >/dev/null 2>&1 || missing="$$missing $$t"; \
 	done; \
+	for t in ruff mypy pytest; do \
+		command -v $(PY_BIN)$$t >/dev/null 2>&1 || missing="$$missing $$t"; \
+	done; \
 	if [ -n "$$missing" ]; then echo "missing:$$missing"; exit 1; fi
 	@echo "all tools present:"
 	@terraform version | head -1
 	@tflint --version | head -1
 	@trivy --version | head -1
 	@pre-commit --version
+	@$(PY_BIN)ruff --version
 
 setup: tools hooks ## Prepare a fresh clone for development
 	@echo "ready. run 'make check' to verify the gate"
@@ -67,25 +81,27 @@ validate: init ## Validate every Terraform root against the provider schema
 lint: ## Lint Terraform with TFLint
 	tflint --recursive --config "$(CURDIR)/.tflint.hcl"
 
+# Two Trivy runs, both with the tfvars loaded so every expression is evaluated
+# with real values. The first is informational: it prints findings of every
+# severity and never fails. The second is the gate: --exit-code 1 makes HIGH
+# and CRITICAL findings fail `make check`. Trivy's exit code defaults to 0,
+# so without that flag the scan reports findings and the gate stays green.
 sec: ## Scan for misconfigurations and hardcoded secrets
-	trivy config --severity HIGH,CRITICAL .
-	trivy config . --tf-vars demo.tfvars
+	trivy config . --tf-vars $(TFVARS)
+	trivy config . --tf-vars $(TFVARS) --severity HIGH,CRITICAL --exit-code 1
 	gitleaks detect --no-git --redact
 
-check: fmt-check validate lint sec ## Run the full gate
-
-## ------------------------------------------------------------------ python
-# Not part of `check` yet: src/ and tests/ hold no Python code.
-# ruff, mypy and pytest join the gate with the ingest Lambda.
-
-py-lint: ## Lint Python
-	ruff check src tests
+py-lint: ## Lint and format-check Python (no file changes)
+	$(PY_BIN)ruff check src tests
+	$(PY_BIN)ruff format --check src tests
 
 py-type: ## Type-check Python
-	mypy
+	$(PY_BIN)mypy
 
 py-test: ## Run the Python test suite
-	pytest
+	$(PY_BIN)pytest
+
+check: fmt-check validate lint sec py-lint py-type py-test ## Run the full gate
 
 ## -------------------------------------------------------------- terraform ops
 
