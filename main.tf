@@ -131,3 +131,36 @@ module "alerting" {
   fire_alert_recipients = var.fire_alert_recipients
   ops_recipients        = var.ops_recipients
 }
+
+# ------------------------------------------------------------------------------
+# System boundary: AWS IoT Core identity + topic rule -> SQS (ADR-0016, ADR-0017, ADR-0018)
+# ------------------------------------------------------------------------------
+
+# One fleet-client identity (Thing + CSR-issued certificate + IoT policy) and
+# the topic rule that forwards telemetry, unchanged, into the messaging queue.
+# The rule's role writes to the CMK-encrypted queue through the key policy's
+# IAM delegation, hence kms_key_arn; the rule's error log group is encrypted
+# with the same key.
+#
+# topic_base reuses resource_prefix: the project identifier names the AWS
+# resources and roots the MQTT topic tree, so the two namespaces cannot drift
+# apart. The {env} topic level comes from the same environment that builds
+# name_prefix: naming, not a hidden demo/prod delta.
+#
+# Only the CSR crosses into Terraform. The private key is generated on the
+# operator's machine and is never read here (ADR-0017). file() needs the CSR to
+# exist before the run, so a fresh machine fails at plan until the key step of
+# the modules/iot README runbook is done.
+module "iot" {
+  source = "./modules/iot"
+
+  name_prefix = local.name_prefix
+  topic_base  = var.resource_prefix
+  environment = var.environment
+
+  queue_arn   = module.messaging.queue_arn
+  queue_url   = module.messaging.queue_url
+  kms_key_arn = module.security.kms_key_arn
+
+  fleet_client_csr_pem = file(pathexpand(var.iot_fleet_client_csr_path))
+}

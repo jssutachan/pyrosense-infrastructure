@@ -6,8 +6,7 @@
 *.tfstate.*
 crash.log
 crash.*.log
-tfplan
-tfplan.json
+tfplan*
 *.tfplan
 *.tfplan.*
 *.tfvars
@@ -72,8 +71,10 @@ kms-key-policy-deployed.json
 .vscode/
 .idea/
 *.swp
-*~
 .DS_Store
 Thumbs.db
-#*#
-*~
+\#*#
+
+# Device CSRs are public material but pin one key pair; they live outside the
+# repository by design (ADR-0017) and should never be committed by accident.
+*.csr

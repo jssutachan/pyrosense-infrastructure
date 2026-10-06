@@ -1,6 +1,7 @@
-# Tool configuration for the ingest Lambda code. This repository is not a
-# Python package: the Lambda is zipped straight from src/ingest_lambda, so
-# only [tool.*] sections live here.
+# Tool configuration for the repository's Python: the ingest Lambda code
+# (src/ingest_lambda), its tests and the operational scripts (scripts/).
+# This repository is not a Python package: the Lambda is zipped straight
+# from src/ingest_lambda, so only [tool.*] sections live here.
 
 [tool.ruff]
 target-version = "py312"
@@ -45,7 +46,8 @@ known-first-party = [
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src/ingest_lambda"]
+# scripts/ is type-checked too; keep in sync with PY_PATHS in the Makefile.
+files = ["src/ingest_lambda", "scripts"]
 
 # boto3/botocore ship no inline types.
 [[tool.mypy.overrides]]

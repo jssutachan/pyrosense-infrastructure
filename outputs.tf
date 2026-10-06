@@ -121,3 +121,66 @@ output "ops_topic_arn" {
   description = "ARN of the operational alarm topic. Observability references it in alarm_actions / ok_actions; only alarms in this account and region may publish to it."
   value       = module.alerting.ops_topic_arn
 }
+
+# ------------------------------------------------------------------------------
+# module.iot (ADR-0016, ADR-0017, ADR-0018)
+#
+# Two audiences again. The operator needs what the simulator needs: the data
+# endpoint, the client ID, the issued certificate and the ready-made
+# environment block (iot_simulator_env). The CLI verification takes the rest:
+# --certificate-id, --target (certificate ARN), --policy-name, --rule-name and
+# --log-group-name. Not re-exported: the rule ARN and the topic filter (both
+# derivable from the rule name and shown by get-topic-rule), and nothing
+# key-related, because no private key ever reaches this configuration.
+#
+# The certificate PEM is public material, but the provider marks the
+# attribute sensitive, so this output must be sensitive too. `terraform
+# output -raw` prints it in plain text, which is how the runbook writes it to
+# disk.
+# ------------------------------------------------------------------------------
+
+output "iot_data_endpoint" {
+  description = "AWS IoT Core ATS data endpoint (host name only). Must equal `aws iot describe-endpoint --endpoint-type iot:Data-ATS`."
+  value       = module.iot.iot_data_endpoint
+}
+
+output "iot_fleet_client_id" {
+  description = "MQTT client ID of the fleet client: the Thing name. The IoT policy denies any other client ID."
+  value       = module.iot.fleet_client_id
+}
+
+output "iot_fleet_client_certificate_id" {
+  description = "Fleet client certificate ID, for aws iot describe-certificate --certificate-id."
+  value       = module.iot.fleet_client_certificate_id
+}
+
+output "iot_fleet_client_certificate_arn" {
+  description = "Fleet client certificate ARN, for aws iot list-attached-policies --target."
+  value       = module.iot.fleet_client_certificate_arn
+}
+
+output "iot_fleet_client_certificate_pem" {
+  description = "Public certificate issued from the CSR. Written to the simulator's PYROSENSE_CERT_PATH with terraform output -raw."
+  value       = module.iot.fleet_client_certificate_pem
+  sensitive   = true
+}
+
+output "iot_fleet_client_policy_name" {
+  description = "IoT policy attached to the fleet client certificate, for aws iot get-policy --policy-name."
+  value       = module.iot.fleet_client_policy_name
+}
+
+output "iot_topic_rule_name" {
+  description = "Telemetry topic rule, for aws iot get-topic-rule --rule-name and as the RuleName dimension of the AWS/IoT rule metrics."
+  value       = module.iot.topic_rule_name
+}
+
+output "iot_rule_error_log_group_name" {
+  description = "Log group receiving the rule's error documents, for aws logs filter-log-events --log-group-name."
+  value       = module.iot.rule_error_log_group_name
+}
+
+output "iot_simulator_env" {
+  description = "PyroSense-Simulator connection settings (endpoint, topic base, env, client ID), excluding local certificate paths. Render with terraform output -json iot_simulator_env | jq -r 'to_entries[] | \"\\(.key)=\\(.value)\"'."
+  value       = module.iot.simulator_env
+}

@@ -4,5 +4,6 @@
 scan:
   skip-dirs:
     - .venv
+    - .venv-iot   # smoke-test SDK env (scripts/iot), not repository code
     - .terraform
     - .git

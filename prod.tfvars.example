@@ -18,8 +18,8 @@ environment = "prod"
 # --- FinOps guardrail (modules/budgets, ADR-0003) -----------------------------
 
 # Sized for a real deployment: continuous telemetry from a deployed sensor
-# fleet, permanent S3 retention and production-grade DynamoDB capacity. This is
-# a monitoring threshold, not a spend commitment.
+# fleet, a permanently retained raw archive in S3 and an on-demand DynamoDB
+# table. This is a monitoring threshold, not a spend commitment.
 budget_limit_usd = 5000
 
 # --- Notification recipients (modules/budgets + modules/alerting, ADR-0014) ---
@@ -57,3 +57,11 @@ kms_deletion_window_days = 30
 # data takes two deliberate steps (flip, apply, then destroy), and the root
 # variable rejects true for prod at plan time anyway.
 allow_data_destruction = false
+
+# --- Device identity (modules/iot, ADR-0017) ----------------------------------
+
+# Its own key pair, never shared with demo: a leaked demo key must not open
+# production. In a real deployment no operator would hand-generate device CSRs;
+# devices would be onboarded through fleet provisioning, which is the revisit
+# trigger of ADR-0017. Listed so the demo/prod delta stays complete.
+iot_fleet_client_csr_path = "~/.config/pyrosense/certs/prod/fleet-client.csr"

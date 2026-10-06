@@ -143,6 +143,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-0015 — Email as the only alert channel in v1.0, scoped as non-life-safety.
 - Root `README.md`: added `modules/alerting` to the repository structure,
   roadmap and ADR index.
+- `modules/iot`: the system boundary. One fleet-client identity — a Thing, an
+  X.509 certificate issued from a CSR (the private key is generated on the
+  operator's machine and never reaches Terraform or its state) and an IoT
+  policy that allows `iot:Connect` only as the Thing's own name and
+  `iot:Publish` only to `{base}/{env}/telemetry/PYRO-T?-????`, both
+  conditioned on `iot:Connection.Thing.IsAttached`. A topic rule
+  (`SELECT *`, no `WHERE`, SQL version 2016-03-23) forwards telemetry
+  unchanged into the messaging queue through a role scoped to
+  `sqs:SendMessage` and the pipeline key; failed deliveries go to a dedicated,
+  CMK-encrypted log group (14-day retention) through a second role, so a broken
+  forwarding policy cannot silence the error path. Account-level IoT logging is
+  deliberately left out: the provider's delete is a no-op, which would leave
+  orphaned account configuration after every demo destroy.
+  (ADR-0016, ADR-0017, ADR-0018)
+- Root module: `iot` wiring, with `topic_base` reusing `resource_prefix` and
+  the `{env}` topic level reusing `environment`; `iot_fleet_client_csr_path`
+  input (one key pair per environment, no default); re-exported `iot_*`
+  outputs, including `iot_simulator_env` (the simulator's connection settings
+  as one block) and the certificate PEM (sensitive).
+- ADR-0016 — IoT: one fleet-client identity and one IoT policy.
+- ADR-0017 — IoT: device certificate issued from a CSR inside Terraform;
+  private key never in state.
+- ADR-0018 — IoT: topic rule → SQS, no filtering, error action to a dedicated
+  log group.
+- Root `README.md`: added `modules/iot` to the repository structure, roadmap
+  and ADR index; documented the CSR prerequisite in Getting started.
+- `demo.tfvars.example` / `prod.tfvars.example`: added
+  `iot_fleet_client_csr_path`.
 
 ### Changed
 
@@ -171,6 +199,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `values(var.ops_recipients)` and is otherwise untouched — one intent ("who
   operates the platform"), one input. Real `demo.tfvars` and `prod.tfvars` must
   be updated before the next plan. (ADR-0014)
+- Root `README.md`: the roadmap row "IoT Core rule → SQS → Lambda" is split
+  into the IoT boundary and the ingest Lambda, matching the approved topology
+  (rule → SQS → Lambda); the status paragraph no longer describes alerting as
+  pending deployment.
 
 ### Fixed
 
@@ -226,3 +258,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `for_each` key. They remain in state in clear text, as Terraform stores every
   value, and `terraform show -json` prints them: `tfplan` and `tfplan.json`
   stay out of version control.
+- The IoT fleet client's private key is generated on the operator's machine,
+  in an owner-only directory outside both repositories; Terraform receives only
+  the CSR, so state holds public material alone (CSR and certificate). The
+  certificate is attached exclusively to one Thing and the policy pins the MQTT
+  client ID to that Thing's name. The device policy grants no subscribe,
+  receive or retained publish.
+- Both topic-rule roles trust `iot.amazonaws.com` only for this account and
+  this rule (`aws:SourceAccount` + `aws:SourceArn`), closing the
+  cross-service confused-deputy path.

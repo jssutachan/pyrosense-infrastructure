@@ -13,8 +13,10 @@
 # Deployment context
 #
 # NOTE: aws_region is consumed only by providers.tf (region). environment is
-# consumed three times: providers.tf (default_tags), main.tf (local.name_prefix)
-# and the cross-variable validation on allow_data_destruction below.
+# consumed four times: providers.tf (default_tags), main.tf (local.name_prefix
+# and module.iot's {env} MQTT topic level) and the cross-variable validation
+# on allow_data_destruction below. resource_prefix is consumed twice in
+# main.tf: local.name_prefix and module.iot's {base} MQTT topic level.
 # ------------------------------------------------------------------------------
 
 variable "aws_region" {
@@ -34,7 +36,7 @@ variable "environment" {
 }
 
 variable "resource_prefix" {
-  description = "Base name prefix for all resources, e.g. 'pyrosense'."
+  description = "Project identifier, e.g. 'pyrosense'. Prefixes every resource name and roots the MQTT topic tree ({base}/{env}/telemetry/{device_id})."
   type        = string
   default     = "pyrosense"
 
@@ -122,5 +124,23 @@ variable "allow_data_destruction" {
   validation {
     condition     = !(var.environment == "prod" && var.allow_data_destruction)
     error_message = "allow_data_destruction must be false when environment is 'prod'."
+  }
+}
+
+# ------------------------------------------------------------------------------
+# Device identity — consumed by module.iot (ADR-0017)
+# ------------------------------------------------------------------------------
+
+variable "iot_fleet_client_csr_path" {
+  description = "Path on the operator's machine to the PEM CSR of the IoT fleet client, e.g. ~/.config/pyrosense/certs/demo/fleet-client.csr. Only the CSR is read; the matching private key stays next to it and never enters Terraform (ADR-0017). Differs per environment: each environment has its own key pair."
+  type        = string
+
+  # No default: there is no safe fallback credential. A missing file fails at
+  # plan (file() needs it before the run), which is the conservative outcome.
+  # The CSR content is validated inside the module; this check only catches
+  # the most dangerous slip, pointing at the private key instead of the CSR.
+  validation {
+    condition     = !endswith(lower(var.iot_fleet_client_csr_path), ".key")
+    error_message = "iot_fleet_client_csr_path must point to the CSR, never to the private key (*.key)."
   }
 }
