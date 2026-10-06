@@ -19,7 +19,7 @@ addresses in this project are PII and the repository is a portfolio artifact.
 
 ```bash
 terraform show -json tfplan > tfplan.json
-jq -f scripts/budget-check.jq tfplan.json
+jq -f scripts/budget/budget-check.jq tfplan.json
 rm -f tfplan.json          # it holds every value in clear text, including addresses
 ```
 

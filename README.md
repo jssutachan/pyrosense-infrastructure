@@ -5,11 +5,12 @@
 
 **Status:** 🚧 Active development — building the `v1.0-serverless` MVP.
 The ingest core (Python Lambda) is complete and fully tested; infrastructure
-wiring is in progress — the FinOps guardrail is deployed, the pipeline
-encryption key, the SQS messaging module and the storage module (DynamoDB hot
-table + S3 raw archive) have been verified in deploy/destroy cycles, and the
-alerting module (SNS fire-risk and operations topics) is code complete and
-pending deployment.
+wiring is in progress — the FinOps guardrail is deployed; the pipeline
+encryption key, the SQS messaging module, the storage module (DynamoDB hot
+table + S3 raw archive) and the alerting module (SNS fire-risk and operations
+topics) have been verified in deploy/destroy cycles; and the IoT Core boundary
+(device identity + topic rule into SQS) is code complete and pending its
+deploy/destroy cycle.
 
 ---
 
@@ -81,6 +82,10 @@ flowchart LR
 > own IAM policy even though the application code never mentions KMS. IoT Core
 > is absent from that group on purpose — its message broker does not persist
 > messages, so there is nothing at rest to encrypt. (ADR-0010)
+> The IoT topic rule's *role* is a different matter: it writes into the
+> CMK-encrypted queue, so like any other producer it carries
+> `kms:GenerateDataKey` and `kms:Decrypt` in its own IAM policy
+> (`modules/iot`).
 
 ---
 
@@ -88,7 +93,7 @@ flowchart LR
 
 | Layer                | Choice                                                       |
 | -------------------- | ----------------------------------------------------------- |
-| Ingestion            | AWS IoT Core (MQTT, X.509 mutual TLS)                       |
+| Ingestion            | AWS IoT Core (MQTT, X.509 mutual TLS, topic rule → SQS)     |
 | Buffering            | Amazon SQS standard queue (+ DLQ), SSE-KMS, partial batch responses |
 | Compute              | AWS Lambda (Python 3.12)                                    |
 | Hot state            | Amazon DynamoDB (single-table, TTL, PITR, SSE-KMS)          |
@@ -133,7 +138,8 @@ ephemerally at near-zero cost. Terraform is parametrized (`demo` / `prod` via
 │   ├── security/            # pipeline KMS key + key policy
 │   ├── messaging/           # SQS ingest queue + DLQ (see its README)
 │   ├── storage/             # DynamoDB hot table + S3 raw archive (see its README)
-│   └── alerting/            # SNS fire-risk + operations topics (see its README)
+│   ├── alerting/            # SNS fire-risk + operations topics (see its README)
+│   └── iot/                 # IoT Core device identity + topic rule → SQS (see its README)
 ├── scripts/                 # helper scripts
 ├── src/
 │   └── ingest_lambda/       # Python 3.12 Lambda source (see its README)
@@ -153,6 +159,8 @@ ephemerally at near-zero cost. Terraform is parametrized (`demo` / `prod` via
 - **Python 3.12** (the Lambda runtime target — the test suite requires 3.12+)
 - Quality gate tooling: `tflint`, `trivy`, `pre-commit`, and `jq` (used to
   inspect the JSON plan before apply)
+  - `openssl`, to generate the IoT fleet client's key pair and CSR locally
+  (see `modules/iot/README.md`)
 
 **Run the Lambda test suite**
 
@@ -168,7 +176,9 @@ pytest              # 91 tests, ≥90% coverage
 **Deploy the infrastructure**
 
 The backend bucket is created once by `bootstrap/state-backend` — see that
-directory's README. Once `config/backend.hcl` exists:
+directory's README. The IoT module also needs the fleet client's CSR on disk
+before the first plan (`iot_fleet_client_csr_path`; runbook in
+`modules/iot/README.md`). Once `config/backend.hcl` and the CSR exist:
 
 ```bash
 terraform init -backend-config=config/backend.hcl
@@ -204,7 +214,8 @@ is tracked in the project log.
 | Messaging (SQS + DLQ)            | ✅ Verified in a deploy/destroy cycle |
 | Storage (DynamoDB + S3)          | ✅ Verified in a deploy/destroy cycle |
 | Alerting (SNS) end to end        | ✅ Verified in a deploy/destroy cycle |
-| IoT Core rule → SQS → Lambda     | ⬜ Planned |
+| IoT Core boundary (identity + rule → SQS) | 🟡 Code complete, pending deploy/destroy cycle |
+| Ingest Lambda (SQS → Lambda)     | ⬜ Planned |
 | Observability (alarms, dashboard)| ⬜ Planned |
 | Terraform CI workflow + OIDC     | ⬜ Planned |
 | Historical analysis (Athena)     | ⬜ Planned |
@@ -232,6 +243,9 @@ Significant decisions are documented as ADRs under `docs/adr/`. Current set:
 | 0013 | Storage: single-table key design and a flat (non-tiered) cold archive |
 | 0014 | Alerting: one module with two purpose-built topics, keyed by recipient labels |
 | 0015 | Email as the only alert channel in v1.0, scoped as non-life-safety |
+| 0016 | IoT: one fleet-client identity and one IoT policy |
+| 0017 | IoT: device certificate issued from a CSR inside Terraform; private key never in state |
+| 0018 | IoT: topic rule → SQS, no filtering, error action to a dedicated log group |
 
 ---
 

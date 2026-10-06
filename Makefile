@@ -21,6 +21,10 @@ BOOTSTRAP_ROOTS := bootstrap/state-backend
 VENV   ?= .venv
 PY_BIN := $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/,)
 
+# Every directory with Python the gate must cover. Keep in sync with
+# [tool.mypy] files in pyproject.toml: a path missing here is a false green.
+PY_PATHS := src tests scripts
+
 .DEFAULT_GOAL := help
 
 .PHONY: help tools setup hooks update-hooks fmt fmt-check init validate lint sec \
@@ -92,8 +96,8 @@ sec: ## Scan for misconfigurations and hardcoded secrets
 	gitleaks detect --no-git --redact
 
 py-lint: ## Lint and format-check Python (no file changes)
-	$(PY_BIN)ruff check src tests
-	$(PY_BIN)ruff format --check src tests
+	$(PY_BIN)ruff check $(PY_PATHS)
+	$(PY_BIN)ruff format --check $(PY_PATHS)
 
 py-type: ## Type-check Python
 	$(PY_BIN)mypy

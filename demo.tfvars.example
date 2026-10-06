@@ -66,3 +66,12 @@ kms_deletion_window_days = 7
 # destroy that relies on it — which is always the case here, since it is set
 # from the first apply.
 allow_data_destruction = true
+
+# --- Device identity (modules/iot, ADR-0017) ----------------------------------
+
+# The fleet client's CSR on this machine. Only the CSR is read: the private key
+# generated with it stays in the same owner-only directory, outside both
+# repositories. Each environment has its own key pair, hence its own path.
+# Create both files with the runbook in modules/iot/README.md before the first
+# plan; destroy needs the CSR too, so keep it until the cycle is over.
+iot_fleet_client_csr_path = "~/.config/pyrosense/certs/demo/fleet-client.csr"
