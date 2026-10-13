@@ -31,6 +31,21 @@ locals {
   # Constraint for module.ingest: batch sizes above 10 require a batching
   # window of at least 1 s, so batch_size must stay <= 10 while this is 0.
   ingest_batching_window_seconds = 0
+
+  # Fire-detection policy for module.ingest: the "cloud decides" half of the
+  # system (ADR-0002, ADR-0005). Locals, not variables: a fire threshold is the
+  # same in demo and prod, and variables.tf holds only the environment delta.
+  # Kept here, not as module defaults, so the policy is read next to the rest
+  # of the design constants instead of being hidden in infrastructure code.
+  # module.ingest validates each one against the contract-v1 ranges.
+  #
+  # Provisional placeholders pending sign-off by the domain owner (ADR-0020):
+  # the values the test suite has always exercised. Not tuned for real fires;
+  # alerting is non-life-safety in v1.0 (ADR-0015). Change here + ADR-0020.
+  ingest_smoke_alert_ppm           = 5.0  # CRITICAL at or above: the only rule that alerts
+  ingest_temp_alert_c              = 30.0 # ELEVATED (with rh) at or above: adds a reason, never alerts in v1
+  ingest_rh_alert_pct              = 25.0 # ELEVATED (with temp) at or below
+  ingest_alert_suppression_minutes = 30   # one email per device per half hour; 1-1440 because the slot TTL is 1 day (debt #15)
 }
 
 # ------------------------------------------------------------------------------
@@ -163,4 +178,50 @@ module "iot" {
   kms_key_arn = module.security.kms_key_arn
 
   fleet_client_csr_pem = file(pathexpand(var.iot_fleet_client_csr_path))
+}
+
+# ------------------------------------------------------------------------------
+# Consumer: SQS -> ingest Lambda -> DynamoDB + S3 + SNS (ADR-0008, ADR-0011, ADR-0019, ADR-0020)
+# ------------------------------------------------------------------------------
+
+# The only compute in the pipeline. It consumes every upstream module and is
+# consumed by none except observability. Retries belong to the queue: a failed
+# message reappears after messaging's visibility timeout and moves to the DLQ
+# after maxReceiveCount, which is why timeout and batching window come from the
+# same two locals messaging derives that timeout from.
+#
+# HOT_RETENTION_DAYS is derived inside the module from messaging's two
+# retentions: a redriven duplicate must still find its hot item, or the
+# conditional write accepts it as new and the alert fires again (ADR-0019 D6).
+#
+# No dependency on module.iot on purpose: the coupling is the queue and the
+# message body (byte-for-byte device JSON), not any output.
+module "ingest" {
+  source = "./modules/ingest"
+
+  name_prefix = local.name_prefix
+  environment = var.environment
+  source_dir  = "${path.module}/src/ingest_lambda"
+
+  kms_key_arn = module.security.kms_key_arn
+
+  queue_arn                       = module.messaging.queue_arn
+  queue_message_retention_seconds = module.messaging.message_retention_seconds
+  dlq_message_retention_seconds   = module.messaging.dlq_message_retention_seconds
+
+  table_name            = module.storage.table_name
+  table_arn             = module.storage.table_arn
+  bucket_id             = module.storage.bucket_id
+  bucket_arn            = module.storage.bucket_arn
+  telemetry_objects_arn = module.storage.telemetry_objects_arn
+
+  fire_alerts_topic_arn = module.alerting.fire_alerts_topic_arn
+
+  timeout_seconds         = local.ingest_lambda_timeout_seconds
+  batching_window_seconds = local.ingest_batching_window_seconds
+
+  smoke_alert_ppm           = local.ingest_smoke_alert_ppm
+  temp_alert_c              = local.ingest_temp_alert_c
+  rh_alert_pct              = local.ingest_rh_alert_pct
+  alert_suppression_minutes = local.ingest_alert_suppression_minutes
 }

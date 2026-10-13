@@ -171,6 +171,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and ADR index; documented the CSR prerequisite in Getting started.
 - `demo.tfvars.example` / `prod.tfvars.example`: added
   `iot_fleet_client_csr_path`.
+- `modules/ingest`: the consumer of the pipeline. A Python 3.12 Lambda on
+  arm64, zipped straight from `src/ingest_lambda` (bytecode excluded, file
+  modes pinned so the hash is stable across machines), fed by an SQS event
+  source with partial batch responses, a batch of 10, a 0 s window and a
+  maximum concurrency of 2, without reserved concurrency. Every environment
+  variable `config.py` reads is injected explicitly and checked non-empty at
+  plan time; the detection thresholds and suppression window are validated
+  against the contract-v1 ranges as defense in depth for `config.py`.
+  `HOT_RETENTION_DAYS` is derived from messaging's retentions (19 days) so a
+  redriven duplicate still finds its hot item. The log group is declared
+  before the function (14-day retention, pipeline key, `Text` format so the
+  EMF lines are extracted). No X-Ray. (ADR-0008, ADR-0009, ADR-0011, ADR-0019)
+- `modules/messaging`: `message_retention_seconds` and
+  `dlq_message_retention_seconds` outputs, consumed by `modules/ingest` to
+  derive the hot-retention floor. No resource changes. (ADR-0011, ADR-0019)
+- Root module: `ingest` wiring, consuming security, messaging, storage and
+  alerting; the v1 fire-detection policy (smoke 5.0 ppm, 30 °C with 25 % RH,
+  30-minute suppression) as root locals, as provisional placeholders
+  pending domain sign-off (ADR-0020); the `archive` provider
+  (`~> 2.8`) enabled; re-exported `ingest_function_name`,
+  `ingest_event_source_mapping_uuid`, `ingest_log_group_name`,
+  `ingest_metrics_namespace` and `ingest_role_arn` outputs. No new root inputs.
+- ADR-0019 — Ingest consumer: runtime, configuration contract, concurrency and
+  IAM scoping.
+- ADR-0020 — Detection policy: ownership and provisional values. The fire
+  thresholds are a domain decision (owner not assigned); engineering owns the
+  mechanism and its plan-time guardrails.
+- Root `README.md`: added `modules/ingest` to the repository structure,
+  roadmap and ADR index.
 
 ### Changed
 
@@ -203,6 +232,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   into the IoT boundary and the ingest Lambda, matching the approved topology
   (rule → SQS → Lambda); the status paragraph no longer describes alerting as
   pending deployment.
+- Root `README.md`: the IoT boundary is now marked as verified in a
+  deploy/destroy cycle, in both the status paragraph and the roadmap; the
+  compute row of the tech stack names the architecture and the event source.
 
 ### Fixed
 
@@ -220,6 +252,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-0006 claimed contract violations are "never retried"; they are retried
   until `maxReceiveCount` and then moved to the DLQ. Corrected to match the
   handler. ADR-0006 and ADR-0008 had unfilled template number placeholders.
+- `modules/messaging/README.md`: removed a duplicated `name_prefix` row that
+  contradicted the module's validation (it claimed 1-69 characters of
+  `[A-Za-z0-9_-]`; the variable accepts 1-64 of `[a-z0-9-]`), updated the stale
+  "not yet deployed" status, and closed the IoT + CMK open item, verified in the
+  `modules/iot` runtime.
 
 ### Security
 
@@ -267,3 +304,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Both topic-rule roles trust `iot.amazonaws.com` only for this account and
   this rule (`aws:SourceAccount` + `aws:SourceArn`), closing the
   cross-service confused-deputy path.
+- The ingest execution role carries one statement per service path, each
+  scoped to a single ARN: the queue (receive, delete, get attributes), the hot
+  table (`PutItem` only), `telemetry/*` in the cold bucket (`PutObject` only),
+  the fire-alert topic (`Publish` only), its own log group's streams, and the
+  pipeline key with only the KMS actions each path needs. No AWS managed
+  policies (both Lambda-SQS ones grant logs actions on `*`), no
+  `logs:CreateLogGroup`, no `kms:DescribeKey`, no X-Ray wildcard. The function's
+  environment variables and its log group are encrypted with the pipeline key.
+  The `kms:ViaService` and encryption-context conditions are applied in a
+  second step, after the unscoped path is proven at runtime.

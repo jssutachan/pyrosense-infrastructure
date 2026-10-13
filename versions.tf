@@ -8,12 +8,12 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
-    #Remove the commentary once the Lambda is ready to be zipped.
-    # archive = {
-    #  source  = "hashicorp/archive"
-    # version = "~> 2.4"
-    #}
   }
+  # hashicorp/archive is not declared here: modules/ingest requires it in
+  # its own versions.tf, where the Lambda zip is built. Declaring it in the
+  # root too would be unused (TFLint terraform_unused_required_providers).
+
+
 
   # Partial backend configuration: account-specific values live in a
   # backend config file (see config/backend.hcl.example) so nothing

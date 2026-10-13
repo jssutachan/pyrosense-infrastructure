@@ -2,15 +2,14 @@
 
 > Serverless, event-driven platform for **early wildfire detection** and
 > **multi-stakeholder alerting**, built on AWS with 100% Infrastructure as Code.
-
 **Status:** 🚧 Active development — building the `v1.0-serverless` MVP.
 The ingest core (Python Lambda) is complete and fully tested; infrastructure
 wiring is in progress — the FinOps guardrail is deployed; the pipeline
 encryption key, the SQS messaging module, the storage module (DynamoDB hot
-table + S3 raw archive) and the alerting module (SNS fire-risk and operations
-topics) have been verified in deploy/destroy cycles; and the IoT Core boundary
-(device identity + topic rule into SQS) is code complete and pending its
-deploy/destroy cycle.
+table + S3 raw archive), the alerting module (SNS fire-risk and operations
+topics) and the IoT Core boundary (device identity + topic rule into SQS) have
+been verified in deploy/destroy cycles; and the ingest Lambda (SQS event source,
+least-privilege role) is code complete and pending its deploy/destroy cycle.
 
 ---
 
@@ -95,7 +94,7 @@ flowchart LR
 | -------------------- | ----------------------------------------------------------- |
 | Ingestion            | AWS IoT Core (MQTT, X.509 mutual TLS, topic rule → SQS)     |
 | Buffering            | Amazon SQS standard queue (+ DLQ), SSE-KMS, partial batch responses |
-| Compute              | AWS Lambda (Python 3.12)                                    |
+| Compute              | AWS Lambda (Python 3.12, arm64, stdlib only), SQS event source with partial batch responses |
 | Hot state            | Amazon DynamoDB (single-table, TTL, PITR, SSE-KMS)          |
 | Alerting             | Amazon SNS                                                  |
 | Cold storage / query | Amazon S3 (SSE-KMS + bucket key, versioned) + Amazon Athena (planned) |
@@ -139,7 +138,8 @@ ephemerally at near-zero cost. Terraform is parametrized (`demo` / `prod` via
 │   ├── messaging/           # SQS ingest queue + DLQ (see its README)
 │   ├── storage/             # DynamoDB hot table + S3 raw archive (see its README)
 │   ├── alerting/            # SNS fire-risk + operations topics (see its README)
-│   └── iot/                 # IoT Core device identity + topic rule → SQS (see its README)
+│   ├── iot/                 # IoT Core device identity + topic rule → SQS (see its README)
+│   └── ingest/              # ingest Lambda, its role and the SQS event source (see its README)
 ├── scripts/                 # helper scripts
 ├── src/
 │   └── ingest_lambda/       # Python 3.12 Lambda source (see its README)
@@ -204,21 +204,21 @@ PyroSense is built in phased stages toward `v1.0-serverless`. Detection → aler
 is prioritized over cold storage to ship the core value slice first. Live status
 is tracked in the project log.
 
-| Area                             | Status |
-| -------------------------------- | ------ |
-| Ingest core (Python Lambda)      | ✅ Complete, tested (91 tests, ~99% coverage) |
-| CI quality gate (Actions)        | ✅ Lint + types + tests on every push |
-| Remote state backend             | ✅ Deployed |
-| FinOps guardrail (budgets)       | ✅ Deployed |
-| Encryption key (KMS)             | ✅ Verified in a deploy/destroy cycle |
-| Messaging (SQS + DLQ)            | ✅ Verified in a deploy/destroy cycle |
-| Storage (DynamoDB + S3)          | ✅ Verified in a deploy/destroy cycle |
-| Alerting (SNS) end to end        | ✅ Verified in a deploy/destroy cycle |
-| IoT Core boundary (identity + rule → SQS) | 🟡 Code complete, pending deploy/destroy cycle |
-| Ingest Lambda (SQS → Lambda)     | ⬜ Planned |
-| Observability (alarms, dashboard)| ⬜ Planned |
-| Terraform CI workflow + OIDC     | ⬜ Planned |
-| Historical analysis (Athena)     | ⬜ Planned |
+| Area                                           | Status |
+| ---------------------------------------------- | ------ |
+| Ingest core (Python Lambda)                    | ✅ Complete, tested (91 tests, ~99% coverage) |
+| CI quality gate (Actions)                      | ✅ Lint + types + tests on every push |
+| Remote state backend                           | ✅ Deployed |
+| FinOps guardrail (budgets)                     | ✅ Deployed |
+| Encryption key (KMS)                           | ✅ Verified in a deploy/destroy cycle |
+| Messaging (SQS + DLQ)                          | ✅ Verified in a deploy/destroy cycle |
+| Storage (DynamoDB + S3)                        | ✅ Verified in a deploy/destroy cycle |
+| Alerting (SNS) end to end                      | ✅ Verified in a deploy/destroy cycle |
+| IoT Core boundary (identity + rule → SQS)      | ✅ Verified in a deploy/destroy cycle |
+| Ingest Lambda (SQS → Lambda)                   | 🟡 Code complete, pending deploy/destroy cycle |
+| Observability (alarms, dashboard)              | ⬜ Planned |
+| Terraform CI workflow + OIDC                   | ⬜ Planned |
+| Historical analysis (Athena)                   | ⬜ Planned |
 
 ---
 
@@ -246,6 +246,8 @@ Significant decisions are documented as ADRs under `docs/adr/`. Current set:
 | 0016 | IoT: one fleet-client identity and one IoT policy |
 | 0017 | IoT: device certificate issued from a CSR inside Terraform; private key never in state |
 | 0018 | IoT: topic rule → SQS, no filtering, error action to a dedicated log group |
+| 0019 | Ingest consumer: runtime, configuration contract, concurrency and IAM scoping |
+| 0020 | Detection policy: ownership and provisional values |
 
 ---
 

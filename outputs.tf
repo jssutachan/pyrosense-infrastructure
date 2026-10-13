@@ -184,3 +184,41 @@ output "iot_simulator_env" {
   description = "PyroSense-Simulator connection settings (endpoint, topic base, env, client ID), excluding local certificate paths. Render with terraform output -json iot_simulator_env | jq -r 'to_entries[] | \"\\(.key)=\\(.value)\"'."
   value       = module.iot.simulator_env
 }
+
+# ------------------------------------------------------------------------------
+# module.ingest (ADR-0019)
+#
+# What the runtime verification types into the CLI: --function-name
+# (get-function-configuration), --uuid (get-event-source-mapping, which takes
+# the mapping's UUID, not a name), --log-group-name (filter-log-events) and
+# --namespace (get-metric-statistics). The role ARN is for the reviewer: it is
+# the identity CloudTrail must show on the KMS, DynamoDB, S3 and SNS calls,
+# proving the role, not an admin, holds the permissions. Not re-exported:
+# function_arn (the ESM and CloudTrail show it) and hot_retention_days (visible
+# in the function's environment in the plan).
+# ------------------------------------------------------------------------------
+
+output "ingest_function_name" {
+  description = "Ingest Lambda function name, for aws lambda get-function-configuration --function-name."
+  value       = module.ingest.function_name
+}
+
+output "ingest_event_source_mapping_uuid" {
+  description = "UUID of the SQS -> Lambda event source mapping, for aws lambda get-event-source-mapping --uuid."
+  value       = module.ingest.event_source_mapping_uuid
+}
+
+output "ingest_log_group_name" {
+  description = "Ingest function log group, for aws logs filter-log-events --log-group-name."
+  value       = module.ingest.log_group_name
+}
+
+output "ingest_metrics_namespace" {
+  description = "CloudWatch namespace of the ingest EMF metrics, for aws cloudwatch get-metric-statistics --namespace."
+  value       = module.ingest.metrics_namespace
+}
+
+output "ingest_role_arn" {
+  description = "Ingest execution role ARN: the userIdentity CloudTrail must show on the role's KMS, DynamoDB, S3 and SNS calls."
+  value       = module.ingest.role_arn
+}

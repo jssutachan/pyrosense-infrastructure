@@ -31,3 +31,19 @@ output "dlq_name" {
   description = "Name of the dead-letter queue. CloudWatch metric dimension QueueName for the DLQ depth alarm."
   value       = aws_sqs_queue.dlq.name
 }
+
+# Retention values are exported for modules/ingest, which derives the hot
+# store's TTL floor from them (debt #16): a message redriven from the DLQ can
+# be as old as the DLQ retention (standard queues keep the original enqueue
+# timestamp) and then waits up to the source retention again (redrive resets
+# it). Exporting the locals keeps that derivation correct if either changes.
+
+output "message_retention_seconds" {
+  description = "Retention of the ingest queue, in seconds. Consumed by modules/ingest to derive HOT_RETENTION_DAYS."
+  value       = aws_sqs_queue.ingest.message_retention_seconds
+}
+
+output "dlq_message_retention_seconds" {
+  description = "Retention of the DLQ, in seconds. Consumed by modules/ingest to derive HOT_RETENTION_DAYS."
+  value       = aws_sqs_queue.dlq.message_retention_seconds
+}

@@ -4,8 +4,9 @@ Standard SQS ingest queue and its dead-letter queue (DLQ): the buffer between
 AWS IoT Core and the ingest Lambda. It absorbs bursts, retries transient
 failures, and isolates messages that keep failing.
 
-**Status:** code complete, not yet deployed. Static gate and runtime
-verification pending (see [Verification](#verification)).
+**Status:** deployed, verified at runtime and destroyed in its own cycle; the
+IoT rule role writing to the encrypted queue was verified in the `modules/iot`
+cycle (2026-10-06). Evidence lives in `docs/evidence/`.
 
 ---
 
@@ -139,11 +140,10 @@ size must stay at or below 10.
 
 | Name | Type | Required | Description |
 |---|---|---|---|
-| `name_prefix` | `string` | yes | Queue name prefix. 1–69 chars of `[A-Za-z0-9_-]`, so `<prefix>-ingest-dlq` fits the 80-char SQS limit. |
+| `name_prefix` | `string` | yes | Queue name prefix. 1–64 chars of `[a-z0-9-]`, matching the root and `modules/security` naming contract. |
 | `kms_key_arn` | `string` | yes | Pipeline CMK **key ARN** (not an alias or key id). IAM policies must name the full key ARN. |
 | `consumer_timeout_seconds` | `number` | yes | Ingest Lambda timeout, integer 1–900. |
 | `consumer_batching_window_seconds` | `number` | yes | Event source mapping batching window, integer 0–300. |
-| `name_prefix` | `string` | yes | Queue name prefix. 1–64 chars of `[a-z0-9-]`, matching the root and `modules/security` naming contract. |
 
 Retention, `maxReceiveCount` and the data key reuse period are `locals`, not
 inputs: they are the same in demo and production (ADR-0002).
@@ -158,6 +158,8 @@ inputs: they are the same in demo and production (ADR-0002).
 | `dlq_arn` | Redrive tooling, triage |
 | `dlq_url` | AWS CLI |
 | `dlq_name` | `observability` (DLQ depth alarm) |
+| `message_retention_seconds` | `ingest` (derives `HOT_RETENTION_DAYS`, debt #16) |
+| `dlq_message_retention_seconds` | `ingest` (derives `HOT_RETENTION_DAYS`, debt #16) |
 
 ---
 
@@ -268,10 +270,10 @@ equals `terraform output -raw ingest_queue_arn`.
 - **Alert latency vs. the 6× rule.** Each transient retry waits one visibility
   timeout. Revisit the function timeout against measured p99 `Duration` once
   `module.ingest` runs, and against an alert-latency SLO once one is defined.
-- **IoT Core + CMK.** AWS documents that the rule must be able to use the key
-  "on the caller's behalf". IAM permissions on the rule role are expected to
-  suffice under `EnableIAMDelegation`; this is confirmed at runtime in
-  `modules/iot`.
+- **IoT Core + CMK: resolved.** The rule role writes to the encrypted queue
+  with IAM permissions alone (`sqs:SendMessage`, `kms:GenerateDataKey`,
+  `kms:Decrypt`) under `EnableIAMDelegation`; verified at runtime in
+  `modules/iot` (debt #12).
 
 ---
 
