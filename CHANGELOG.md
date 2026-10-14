@@ -87,7 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (SQS batch orchestration with partial batch responses). No runtime
   dependencies; `boto3` is provided by the Lambda runtime.
   (ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009)
-- Test suite (`tests/`): 91 pytest tests, ~99% branch coverage, running against
+- Test suite (`tests/`): 95 pytest tests (was 91), ~99% branch coverage, running against
   an in-memory AWS (moto) — no account, no credentials, no cost. `conftest.py`
   provisions a fresh DynamoDB/S3/SNS stack per test and wires an SQS queue to
   the SNS topic to assert on published alerts. Includes regression tests for the
@@ -229,6 +229,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-0021 — Observability: one fault, one page; fleet silence as a breaching
   heartbeat; no account-level IoT logging and manual replay of IoT rule errors
   in v1.0.
+- Ingest Lambda: a fire alert that cannot be published after its suppression
+  slot was claimed is now observable. The handler counts it in a new EMF
+  counter, `AlertPublishFailures` (emitted on every invocation, zero
+  included), and logs one CRITICAL line carrying `message_id`, `device_id` and
+  `seq`, so an operator can notify responders by hand; the message is still
+  retried for its S3 and hot-store writes. Claim-before-publish is unchanged
+  (ADR-0005): releasing the slot so the retry can deliver the alert is
+  deferred. (ADR-0005, ADR-0015, ADR-0021)
+- Tests pinning the observability contracts of the handler: the six EMF
+  counter names and their dimension, and the `Processing failed` prefix of the
+  transient-failure log line, which a CloudWatch metric filter counts.
 
 ### Changed
 
@@ -304,6 +315,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Root `main.tf`: the `module "ingest"` comment said "Retries belong to the
 queue", wording already corrected inside the module; it now states the
   handler/queue division of labour of ADR-0011.
+- `alerts.py`: SNS requires a Subject of less than 100 characters; the
+  truncation limit was 100 and is now 99. Latent, since current subjects are
+  about 45 characters.
+- Docstrings citing the wrong ADRs: `alerts.py` now cites ADR-0005 and
+  ADR-0015 instead of "the open ADR", and `persistence.py` cites ADR-0008 for
+  deduplication; `structured_logging.py` no longer refers to a non-existent
+  `lambda_log_level` setting.
 
 ### Security
 

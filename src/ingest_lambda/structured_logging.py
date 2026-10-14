@@ -84,8 +84,9 @@ def configure(level: str) -> None:
 
     An unrecognized level name degrades to ``INFO`` instead of raising: a
     typo in an observability setting must never stop fire detection.
-    ``lambda_log_level`` should also be constrained at ``terraform plan``
-    time so the typo never reaches the runtime in the first place.
+    In the deployed function ``LOG_LEVEL`` is a constant of
+    ``modules/ingest`` (``INFO``), not an operator input, so the fallback
+    guards local runs and future changes rather than a tfvars typo.
 
     Args:
         level: Logging level name (``DEBUG``, ``INFO``, ``WARNING``...).
