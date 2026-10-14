@@ -6,7 +6,9 @@ Consumes telemetry batches from SQS and, per message:
 2. Classifies fire risk (:mod:`risk`) — the decision the sensor never makes.
 3. Archives the raw body in S3 (:mod:`cold_store`, idempotent by key).
 4. On CRITICAL risk, publishes an alert guarded by the per-device
-   suppression window (:mod:`alerts`).
+   suppression window (:mod:`alerts`). A publish that fails after the slot
+   was claimed is counted (``AlertPublishFailures``) and logged at CRITICAL,
+   because that alert is lost for the window (ADR-0005, ADR-0015).
 5. Inserts the hot item in DynamoDB; the conditional write doubles as
    the at-least-once deduplication guard (:mod:`persistence`).
 
@@ -43,6 +45,13 @@ from contract import ContractViolationError, validate_payload
 from risk import RiskLevel, evaluate
 
 logger = logging.getLogger(__name__)
+
+#: Prefix of every log line for a message that failed for a non-contract
+#: reason and will be retried. modules/observability counts these lines with
+#: the metric filter ``{ $.message = "Processing failed*" }`` (alarm
+#: ``transient-failures``); changing the text silences that alarm without any
+#: error, which is why a test pins the rendered JSON line.
+TRANSIENT_FAILURE_LOG_PREFIX = "Processing failed"
 
 
 @functools.lru_cache(maxsize=1)
@@ -90,6 +99,9 @@ def _process_message(body: str, settings: Settings, now: datetime) -> dict[str, 
     Raises:
         ContractViolationError: If the payload breaks contract v1 (permanent
             failure — the message must redrive to the DLQ).
+        alerts.AlertPublishError: If a CRITICAL alert could not be published
+            after its suppression slot was claimed (the message is retried,
+            but the alert is lost for the suppression window).
         Exception: Any AWS failure (transient — the message is retried).
     """
     counts = {
@@ -121,7 +133,14 @@ def _process_message(body: str, settings: Settings, now: datetime) -> dict[str, 
             suppression_minutes=settings.alert_suppression_minutes,
             now=now,
         ):
-            alerts.publish_alert(get_sns(), settings.alert_topic_arn, record, assessment)
+            try:
+                alerts.publish_alert(get_sns(), settings.alert_topic_arn, record, assessment)
+            except Exception as exc:
+                # Any failure here, whatever its type, happens after the slot
+                # was claimed: the retry will be suppressed and the alert is
+                # lost. Re-raised as one typed error so the handler can count
+                # and report it with the device identity (ADR-0015 D2).
+                raise alerts.AlertPublishError(record.device_id, record.seq) from exc
             counts["AlertsPublished"] = 1
             logger.warning(
                 "CRITICAL risk at %s (seq=%d): %s",
@@ -178,6 +197,9 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         "InvalidPayloads": 0,
         "AlertsPublished": 0,
         "AlertsSuppressed": 0,
+        # Always emitted, zero included, like the counters above: the
+        # alert-publish-failures alarm reads it (ADR-0015 D2, ADR-0021).
+        "AlertPublishFailures": 0,
     }
 
     for sqs_record in event.get("Records", []):
@@ -195,11 +217,29 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                 exc.errors,
                 extra={"message_id": message_id, "errors": exc.errors},
             )
+        except alerts.AlertPublishError as exc:
+            # Retried like any transient failure (S3 and the hot item still
+            # need to be written), but the alert itself is gone: the retry
+            # will find the suppression window closed. CRITICAL, with the
+            # device identity, is what the operator acts on.
+            totals["AlertPublishFailures"] += 1
+            failures.append({"itemIdentifier": message_id})
+            logger.critical(
+                "%s (message %s): fire alert for %s seq=%d was NOT published "
+                "and is lost for the suppression window; notify responders manually",
+                TRANSIENT_FAILURE_LOG_PREFIX,
+                message_id,
+                exc.device_id,
+                exc.seq,
+                exc_info=True,
+                extra={"message_id": message_id, "device_id": exc.device_id, "seq": exc.seq},
+            )
         except Exception:
             # Transient (throttling, permissions, networking): retry.
             failures.append({"itemIdentifier": message_id})
             logger.exception(
-                "Processing failed (message %s); will retry",
+                "%s (message %s); will retry",
+                TRANSIENT_FAILURE_LOG_PREFIX,
                 message_id,
                 extra={"message_id": message_id},
             )

@@ -14,7 +14,9 @@ publishing would instead duplicate emails whenever two executions race.
 For an early-warning MVP, dropping at most one alert on a rare SNS failure
 is preferable to email storms; a two-phase claim (short reservation +
 confirm-after-publish) is the production-hardening path if this ever
-matters. See the open ADR on alert delivery semantics.
+matters. See ADR-0005 (claim-before-publish) and ADR-0015 decision 2: a
+failed publish must be observable, which is what :class:`AlertPublishError`
+is for.
 """
 
 from __future__ import annotations
@@ -32,8 +34,36 @@ from risk import RiskAssessment
 ALERT_PK = "ALERT#{device_id}"
 ALERT_SK = "STATE"
 
-#: SNS subjects are limited to 100 characters.
-_MAX_SUBJECT = 100
+#: SNS requires a Subject of *less than* 100 characters (Publish API), so the
+#: longest valid subject is 99.
+_MAX_SUBJECT = 99
+
+
+class AlertPublishError(Exception):
+    """A fire alert was not published after its suppression slot was claimed.
+
+    Under claim-before-publish (ADR-0005) the slot is already taken when this
+    is raised, so the SQS retry of the same message will find the window
+    closed and the alert is lost for the suppression window. The handler
+    counts it as ``AlertPublishFailures`` and logs it at CRITICAL with the
+    device identity, so an operator can notify responders by hand
+    (ADR-0015, decision 2).
+
+    Attributes:
+        device_id: Device the lost alert referred to.
+        seq: Sequence number of the reading that triggered it.
+    """
+
+    def __init__(self, device_id: str, seq: int) -> None:
+        """Record which alert was lost.
+
+        Args:
+            device_id: Device the lost alert referred to.
+            seq: Sequence number of the reading that triggered it.
+        """
+        super().__init__(f"fire alert for {device_id} seq={seq} was not published")
+        self.device_id = device_id
+        self.seq = seq
 
 
 def try_acquire_alert_slot(
