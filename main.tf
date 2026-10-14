@@ -5,8 +5,9 @@
 # Provider, versions and backend live in providers.tf / versions.tf.
 #
 # Module order below follows the dependency chain: security produces the key
-# ARN that messaging, storage, alerting, iot, ingest and observability will all
-# consume as they are added.
+# ARN that messaging, storage, alerting, iot and ingest consume; observability
+# comes last because it reads the names every other module exports, and it
+# needs no key (its alarms are authorized by the key policy, not by an input).
 # ==============================================================================
 
 locals {
@@ -22,9 +23,11 @@ locals {
   # cannot disagree. Locals, not variables: they are identical in demo and
   # prod (ADR-0002), and variables.tf holds only the environment delta.
   #
-  # 30 s is provisional: no Duration data exists yet. Revisit once
-  # module.ingest runs, against the measured p99 Duration and the alert
-  # latency trade-off (each transient retry waits one visibility timeout).
+  # 30 s, kept after measurement (ADR-0021 D5): the 2026-10-07 demo cycle
+  # recorded 21 invocations with Duration p50 52 ms, p99 1711 ms and maximum
+  # 1715 ms, under 6 % of the timeout. Not lowered: the visibility timeout and
+  # the time to DLQ derive from it (ADR-0011), and 21 demo samples do not
+  # justify retuning the retry contract. Revisit with production-scale Duration.
   ingest_lambda_timeout_seconds = 30
 
   # 0 = invoke as soon as messages are available (lowest alert latency).
@@ -46,6 +49,17 @@ locals {
   ingest_temp_alert_c              = 30.0 # ELEVATED (with rh) at or above: adds a reason, never alerts in v1
   ingest_rh_alert_pct              = 25.0 # ELEVATED (with temp) at or below
   ingest_alert_suppression_minutes = 30   # one email per device per half hour; 1-1440 because the slot TTL is 1 day (debt #15)
+
+  # Operations policy for module.observability (ADR-0021 D2): minutes without
+  # a single message matched by the telemetry rule before the fleet is
+  # declared silent. A local, not a variable: the window is the same in demo
+  # and prod. In demo the alarm fires after every test burst, and those emails
+  # are the end-to-end proof that alarms reach the encrypted ops topic.
+  # Provisional, like the detection policy above: set it from the real sensor
+  # reporting cadence once a domain owner exists. A multiple of 5 between 5
+  # and 1440 (validated in the module).
+  observability_telemetry_silence_minutes = 10
+
 }
 
 # ------------------------------------------------------------------------------
@@ -72,8 +86,10 @@ module "budgets" {
 # ------------------------------------------------------------------------------
 
 # The single customer-managed KMS key for the whole pipeline. Must exist before
-# any module that stores data at rest: messaging, storage, alerting, iot,
-# ingest and observability all consume kms_key_arn.
+# any module that stores data at rest: messaging, storage, alerting, iot and
+# ingest consume kms_key_arn. Observability does not: CloudWatch alarms reach
+# the encrypted ops topic as a service principal authorized in this key's
+# policy (AllowCloudWatchAlarms), not through an input.
 module "security" {
   source = "./modules/security"
 
@@ -151,11 +167,13 @@ module "alerting" {
 # System boundary: AWS IoT Core identity + topic rule -> SQS (ADR-0016, ADR-0017, ADR-0018)
 # ------------------------------------------------------------------------------
 
-# One fleet-client identity (Thing + CSR-issued certificate + IoT policy) and
-# the topic rule that forwards telemetry, unchanged, into the messaging queue.
-# The rule's role writes to the CMK-encrypted queue through the key policy's
-# IAM delegation, hence kms_key_arn; the rule's error log group is encrypted
-# with the same key.
+# The only compute in the pipeline. It consumes every upstream module and is
+# consumed by none except observability. Division of labour on failure
+# (ADR-0011): the handler decides WHICH messages failed and reports them in
+# batchItemFailures; the queue decides WHEN to retry them (visibility timeout)
+# and WHEN to give up (maxReceiveCount -> DLQ). That is why timeout and
+# batching window come from the same two locals messaging derives the
+# visibility timeout from.
 #
 # topic_base reuses resource_prefix: the project identifier names the AWS
 # resources and roots the MQTT topic tree, so the two namespaces cannot drift
@@ -224,4 +242,43 @@ module "ingest" {
   temp_alert_c              = local.ingest_temp_alert_c
   rh_alert_pct              = local.ingest_rh_alert_pct
   alert_suppression_minutes = local.ingest_alert_suppression_minutes
+}
+
+# ------------------------------------------------------------------------------
+# Observability: CloudWatch alarms -> SNS ops topic, log metric filters, dashboard (ADR-0021)
+# ------------------------------------------------------------------------------
+
+# Answers "who finds out if this fails?" for every boundary of the pipeline:
+# ten alarms, each owning one fault at the layer where it first becomes
+# visible, all notifying the ops topic on ALARM and on OK. It reads only names
+# and ARNs the other modules already export, creates no data path and takes no
+# KMS input (see module.security above).
+#
+# Thresholds are derived, not typed: the queue-age alarm fires above two of
+# messaging's visibility timeouts, and the Duration widget draws the same
+# timeout local the function uses, so retuning the consumer moves the alarms
+# with it. The silence window is policy and lives with the design constants
+# in the locals block.
+module "observability" {
+  source = "./modules/observability"
+
+  name_prefix = local.name_prefix
+  environment = var.environment
+
+  queue_name                       = module.messaging.queue_name
+  dlq_name                         = module.messaging.dlq_name
+  queue_visibility_timeout_seconds = module.messaging.visibility_timeout_seconds
+
+  function_name            = module.ingest.function_name
+  function_timeout_seconds = local.ingest_lambda_timeout_seconds
+  ingest_log_group_name    = module.ingest.log_group_name
+  metrics_namespace        = module.ingest.metrics_namespace
+
+  topic_rule_name           = module.iot.topic_rule_name
+  rule_error_log_group_name = module.iot.rule_error_log_group_name
+
+  fire_alerts_topic_name = module.alerting.fire_alerts_topic_name
+  ops_topic_arn          = module.alerting.ops_topic_arn
+
+  telemetry_silence_minutes = local.observability_telemetry_silence_minutes
 }
