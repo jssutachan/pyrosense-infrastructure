@@ -9,7 +9,7 @@ output "alarm_name_prefix" {
 }
 
 output "alarm_names" {
-  description = "Alarm name per signal key (e.g. dlq-not-empty), for `describe-alarm-history --alarm-name` and `set-alarm-state --alarm-name` in the runbook."
+  description = "Alarm name per signal key (e.g. dlq-not-empty), for `aws cloudwatch describe-alarm-history --alarm-name` and `aws cloudwatch set-alarm-state --alarm-name`."
   value       = { for k, a in aws_cloudwatch_metric_alarm.this : k => a.alarm_name }
 }
 

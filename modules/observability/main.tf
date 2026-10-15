@@ -64,10 +64,8 @@ locals {
   transient_failure_signal    = "TransientFailures"
   rule_error_documents_signal = "RuleErrorDocuments"
 
-  # Shared by every alarm. The keys of local.alarms are part of each alarm's
-  # name and of the runbook anchor, so renaming one is a breaking change for
-  # the runbook (and replaces the alarm).
-  runbook = "RUNBOOK-observability.md"
+  # The keys of local.alarms are part of each alarm's name, so renaming one
+  # replaces the alarm.
 
   alarms = {
     # ---- Edge: is the fleet reporting at all? ----------------------------
@@ -325,7 +323,7 @@ resource "aws_cloudwatch_metric_alarm" "this" {
   for_each = local.alarms
 
   alarm_name        = "${var.name_prefix}-${each.key}"
-  alarm_description = "${each.value.description} Runbook: ${local.runbook}#${each.key}"
+  alarm_description = each.value.description
 
   namespace           = each.value.namespace
   metric_name         = each.value.metric_name
@@ -361,7 +359,7 @@ resource "aws_cloudwatch_metric_alarm" "this" {
     }
 
     precondition {
-      condition     = length("${each.value.description} Runbook: ${local.runbook}#${each.key}") <= 1024
+      condition     = length(each.value.description) <= 1024
       error_message = "CloudWatch alarm descriptions are limited to 1024 characters."
     }
 
