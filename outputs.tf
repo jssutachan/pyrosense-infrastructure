@@ -222,3 +222,36 @@ output "ingest_role_arn" {
   description = "Ingest execution role ARN: the userIdentity CloudTrail must show on the role's KMS, DynamoDB, S3 and SNS calls."
   value       = module.ingest.role_arn
 }
+
+# ------------------------------------------------------------------------------
+# module.observability (ADR-0021)
+#
+# What the runtime verification types into the CLI: alarm names for
+# describe-alarm-history and set-alarm-state --alarm-name; the common prefix for
+# describe-alarms --alarm-name-prefix, which is also the post-destroy proof that
+# no alarm was left behind; the dashboard name for get-dashboard; and the
+# namespace of the log-derived metrics for get-metric-statistics --namespace.
+# Not re-exported: alarm ARNs (no CLI call used here takes them, and
+# describe-alarms shows them) and the metric filter names (an implementation
+# detail; describe-metric-filters lists them by log group).
+# ------------------------------------------------------------------------------
+
+output "observability_alarm_names" {
+  description = "Alarm name per signal key (e.g. dlq-not-empty), for aws cloudwatch describe-alarm-history / set-alarm-state --alarm-name. Render one with terraform output -json observability_alarm_names | jq -r '.\"dlq-not-empty\"'."
+  value       = module.observability.alarm_names
+}
+
+output "observability_alarm_name_prefix" {
+  description = "Common prefix of every observability alarm, for aws cloudwatch describe-alarms --alarm-name-prefix. Record it before destroy: after destroy the same query must return no alarms."
+  value       = module.observability.alarm_name_prefix
+}
+
+output "observability_dashboard_name" {
+  description = "Pipeline dashboard name, for aws cloudwatch get-dashboard --dashboard-name."
+  value       = module.observability.dashboard_name
+}
+
+output "observability_log_metrics_namespace" {
+  description = "Namespace of the log-derived metrics (TransientFailures, RuleErrorDocuments), for aws cloudwatch get-metric-statistics --namespace."
+  value       = module.observability.log_metrics_namespace
+}

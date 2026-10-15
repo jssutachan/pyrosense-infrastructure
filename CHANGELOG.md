@@ -87,7 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (SQS batch orchestration with partial batch responses). No runtime
   dependencies; `boto3` is provided by the Lambda runtime.
   (ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009)
-- Test suite (`tests/`): 91 pytest tests, ~99% branch coverage, running against
+- Test suite (`tests/`): 95 pytest tests (was 91), ~99% branch coverage, running against
   an in-memory AWS (moto) — no account, no credentials, no cost. `conftest.py`
   provisions a fresh DynamoDB/S3/SNS stack per test and wires an SQS queue to
   the SNS topic to assert on published alerts. Includes regression tests for the
@@ -200,6 +200,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mechanism and its plan-time guardrails.
 - Root `README.md`: added `modules/ingest` to the repository structure,
   roadmap and ADR index.
+- `modules/observability`: the answer to "who finds out if this fails?" for
+  every boundary of the pipeline. Ten CloudWatch alarms, each owning one fault
+  at the layer where it first becomes visible: fleet silence (IoT
+  `TopicMatch`, missing data treated as breaching), denied MQTT publishes, IoT
+  rule → SQS failures, ingest queue age above two visibility timeouts, a
+  non-empty DLQ, Lambda errors and throttles, per-message dependency failures,
+  lost fire alerts (`AlertPublishFailures`) and failed fire-alert deliveries.
+  Every alarm notifies the KMS-encrypted ops topic on ALARM and on OK; no
+  composite alarm, because actions fire on transitions and the signals do not
+  overlap. Missing-data treatment is chosen per alarm; the DLQ keeps its last
+  state because SQS stops emitting metrics for a dormant queue even while it
+  holds messages. Two log metric filters turn existing lines into signals
+  (`TransientFailures`, which Lambda `Errors` cannot see because the handler
+  catches per-message exceptions, and `RuleErrorDocuments` as a cross-check),
+  and one dashboard shows both sides of every boundary in data-flow order.
+  No KMS input, no IAM, no log group: the alarms reach the topic as a service
+  principal authorized by the key and topic policies. (ADR-0021)
+- `modules/messaging`: `visibility_timeout_seconds` output, consumed by
+  `modules/observability` to derive the queue-age alarm threshold. No resource
+  changes. (ADR-0011, ADR-0021)
+- Root module: `observability` wiring, consuming messaging, ingest, iot and
+  alerting; `observability_telemetry_silence_minutes` local (10 minutes,
+  provisional operations policy); re-exported `observability_alarm_names`,
+  `observability_alarm_name_prefix`, `observability_dashboard_name` and
+  `observability_log_metrics_namespace` outputs. No new root inputs; the
+  demo/prod tfvars are unchanged. (ADR-0021)
+- ADR-0021 — Observability: one fault, one page; fleet silence as a breaching
+  heartbeat; no account-level IoT logging and manual replay of IoT rule errors
+  in v1.0.
+- Ingest Lambda: a fire alert that cannot be published after its suppression
+  slot was claimed is now observable. The handler counts it in a new EMF
+  counter, `AlertPublishFailures` (emitted on every invocation, zero
+  included), and logs one CRITICAL line carrying `message_id`, `device_id` and
+  `seq`, so an operator can notify responders by hand; the message is still
+  retried for its S3 and hot-store writes. Claim-before-publish is unchanged
+  (ADR-0005): releasing the slot so the retry can deliver the alert is
+  deferred. (ADR-0005, ADR-0015, ADR-0021)
+- Tests pinning the observability contracts of the handler: the six EMF
+  counter names and their dimension, and the `Processing failed` prefix of the
+  transient-failure log line, which a CloudWatch metric filter counts.
 
 ### Changed
 
@@ -235,6 +275,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Root `README.md`: the IoT boundary is now marked as verified in a
   deploy/destroy cycle, in both the status paragraph and the roadmap; the
   compute row of the tech stack names the architecture and the event source.
+- Root `README.md`: the ingest Lambda is now marked as verified end to end in
+  a deploy/destroy cycle (MQTT → IoT Core → SQS → Lambda → DynamoDB, S3 and an
+  alert email); observability added to the reference architecture,
+  repository structure, roadmap and ADR index; the observability row of the
+  tech stack names the alarm path.
+- Root `main.tf`: the ingest timeout comment records the measured Duration
+  (p99 1711 ms, maximum 1715 ms over 21 invocations) and the decision to keep
+  30 s, replacing "no Duration data exists yet". (ADR-0021)
 
 ### Fixed
 
@@ -257,6 +305,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `[A-Za-z0-9_-]`; the variable accepts 1-64 of `[a-z0-9-]`), updated the stale
   "not yet deployed" status, and closed the IoT + CMK open item, verified in the
   `modules/iot` runtime.
+- Root `main.tf`: the header and the `module "security"` comment listed
+  observability as a consumer of the KMS key ARN; it is not, since alarms are
+  authorized in the key policy.
+- Root `variables.tf`: the NOTE on `environment` counted four consumers and
+  omitted `module.ingest`; it now lists every consumer by name.
+- Root `README.md`: the status paragraph followed the opening blockquote
+  without a blank line, so Markdown rendered it inside the quote.
+- Root `main.tf`: the `module "ingest"` comment said "Retries belong to the
+queue", wording already corrected inside the module; it now states the
+  handler/queue division of labour of ADR-0011.
+- `alerts.py`: SNS requires a Subject of less than 100 characters; the
+  truncation limit was 100 and is now 99. Latent, since current subjects are
+  about 45 characters.
+- Docstrings citing the wrong ADRs: `alerts.py` now cites ADR-0005 and
+  ADR-0015 instead of "the open ADR", and `persistence.py` cites ADR-0008 for
+  deduplication; `structured_logging.py` no longer refers to a non-existent
+  `lambda_log_level` setting.
 
 ### Security
 
@@ -314,3 +379,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   environment variables and its log group are encrypted with the pipeline key.
   The `kms:ViaService` and encryption-context conditions are applied in a
   second step, after the unscoped path is proven at runtime.
+- The key policy's `AllowCloudWatchAlarms` statement moves from
+  `StringEqualsIfExists aws:SourceAccount` to `StringEquals aws:SourceAccount`
+  plus `ArnLike aws:SourceArn` on alarm ARNs in this account and region, the
+  confused-deputy pattern AWS documents for service principals on encrypted
+  SNS topics. Applied only after a real alarm proved the path with the
+  previous statement, and re-proven with a second alarm. (ADR-0010, ADR-0021)

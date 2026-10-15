@@ -2,14 +2,18 @@
 
 > Serverless, event-driven platform for **early wildfire detection** and
 > **multi-stakeholder alerting**, built on AWS with 100% Infrastructure as Code.
+
 **Status:** 🚧 Active development — building the `v1.0-serverless` MVP.
-The ingest core (Python Lambda) is complete and fully tested; infrastructure
-wiring is in progress — the FinOps guardrail is deployed; the pipeline
-encryption key, the SQS messaging module, the storage module (DynamoDB hot
-table + S3 raw archive), the alerting module (SNS fire-risk and operations
-topics) and the IoT Core boundary (device identity + topic rule into SQS) have
-been verified in deploy/destroy cycles; and the ingest Lambda (SQS event source,
-least-privilege role) is code complete and pending its deploy/destroy cycle.
+The ingest core (Python Lambda) is complete and fully tested, and every data
+path has been verified in deploy/destroy cycles: the FinOps guardrail is
+deployed; the pipeline encryption key, the SQS messaging module, the storage
+module (DynamoDB hot table + S3 raw archive), the alerting module (SNS
+fire-risk and operations topics), the IoT Core boundary (device identity +
+topic rule into SQS) and the ingest Lambda (SQS event source, least-privilege
+role) have been verified, the last one end to end from an MQTT publish to an
+alert email. The observability module (CloudWatch alarms into the operations
+topic, log metric filters, dashboard) is code complete and pending its
+deploy/destroy cycle.
 
 ---
 
@@ -60,6 +64,8 @@ flowchart LR
     CW["CloudWatch<br/>logs + metrics + alarms"]
     L -.-> CW
     IOT -.-> CW
+    SQS -.-> CW
+    CW -->|alarm actions| OPS["SNS ops topic<br/>(operators, email)"]
 
     subgraph Crypto["Encryption at rest"]
         KMS["KMS CMK<br/>modules/security"]
@@ -70,6 +76,7 @@ flowchart LR
     SNS -.->|SSE-KMS| KMS
     S3 -.->|SSE-KMS| KMS
     CW -.->|SSE-KMS| KMS
+    OPS -.->|SSE-KMS| KMS
 ```
 
 > The diagram reflects the **target** design; components are added to this repo
@@ -98,7 +105,7 @@ flowchart LR
 | Hot state            | Amazon DynamoDB (single-table, TTL, PITR, SSE-KMS)          |
 | Alerting             | Amazon SNS                                                  |
 | Cold storage / query | Amazon S3 (SSE-KMS + bucket key, versioned) + Amazon Athena (planned) |
-| Observability        | Amazon CloudWatch (structured logs, EMF metrics, alarms)   |
+| Observability        | Amazon CloudWatch (JSON logs, EMF metrics, log metric filters, 10 alarms → encrypted SNS ops topic, pipeline dashboard) |
 | IaC                  | Terraform (remote S3 backend, native state locking)        |
 | CI/CD                | GitHub Actions                                              |
 | Quality gate         | `terraform fmt/validate`, tflint, trivy, gitleaks, ruff, mypy, pytest (≥90% coverage) |
@@ -139,7 +146,8 @@ ephemerally at near-zero cost. Terraform is parametrized (`demo` / `prod` via
 │   ├── storage/             # DynamoDB hot table + S3 raw archive (see its README)
 │   ├── alerting/            # SNS fire-risk + operations topics (see its README)
 │   ├── iot/                 # IoT Core device identity + topic rule → SQS (see its README)
-│   └── ingest/              # ingest Lambda, its role and the SQS event source (see its README)
+│   ├── ingest/              # ingest Lambda, its role and the SQS event source (see its README)
+│   └── observability/       # CloudWatch alarms, log metric filters, dashboard (see its README)
 ├── scripts/                 # helper scripts
 ├── src/
 │   └── ingest_lambda/       # Python 3.12 Lambda source (see its README)
@@ -159,7 +167,7 @@ ephemerally at near-zero cost. Terraform is parametrized (`demo` / `prod` via
 - **Python 3.12** (the Lambda runtime target — the test suite requires 3.12+)
 - Quality gate tooling: `tflint`, `trivy`, `pre-commit`, and `jq` (used to
   inspect the JSON plan before apply)
-  - `openssl`, to generate the IoT fleet client's key pair and CSR locally
+- `openssl`, to generate the IoT fleet client's key pair and CSR locally
   (see `modules/iot/README.md`)
 
 **Run the Lambda test suite**
@@ -248,6 +256,7 @@ Significant decisions are documented as ADRs under `docs/adr/`. Current set:
 | 0018 | IoT: topic rule → SQS, no filtering, error action to a dedicated log group |
 | 0019 | Ingest consumer: runtime, configuration contract, concurrency and IAM scoping |
 | 0020 | Detection policy: ownership and provisional values |
+| 0021 | Observability: one fault, one page; fleet silence as a breaching heartbeat |
 
 ---
 

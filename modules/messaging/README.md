@@ -160,6 +160,7 @@ inputs: they are the same in demo and production (ADR-0002).
 | `dlq_name` | `observability` (DLQ depth alarm) |
 | `message_retention_seconds` | `ingest` (derives `HOT_RETENTION_DAYS`, debt #16) |
 | `dlq_message_retention_seconds` | `ingest` (derives `HOT_RETENTION_DAYS`, debt #16) |
+| `visibility_timeout_seconds` | `observability` (queue-age threshold) |
 
 ---
 

@@ -12,11 +12,13 @@
 # ------------------------------------------------------------------------------
 # Deployment context
 #
-# NOTE: aws_region is consumed only by providers.tf (region). environment is
-# consumed four times: providers.tf (default_tags), main.tf (local.name_prefix
-# and module.iot's {env} MQTT topic level) and the cross-variable validation
-# on allow_data_destruction below. resource_prefix is consumed twice in
-# main.tf: local.name_prefix and module.iot's {base} MQTT topic level.
+# NOTE: aws_region is consumed only by providers.tf (region). environment
+# drives providers.tf (default_tags), local.name_prefix, the {env} MQTT topic
+# level (module.iot), the ENVIRONMENT setting and EMF dimension of the ingest
+# function (module.ingest), the alarm dimensions and log-metric namespace of
+# module.observability, and the cross-variable validation on
+# allow_data_destruction below. resource_prefix is consumed twice in main.tf:
+# local.name_prefix and module.iot's {base} MQTT topic level.
 # ------------------------------------------------------------------------------
 
 variable "aws_region" {

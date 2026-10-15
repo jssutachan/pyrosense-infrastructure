@@ -1,6 +1,7 @@
 # Consumers: modules/iot (queue ARN for the rule action and its role policy),
 # modules/ingest (queue ARN for the event source mapping and the Lambda role),
-# modules/observability (queue and DLQ names for CloudWatch alarm dimensions).
+# modules/observability (queue and DLQ names for CloudWatch alarm dimensions,
+# visibility timeout for the queue-age threshold).
 
 output "queue_arn" {
   description = "ARN of the ingest queue. Used in the IoT rule role policy (sqs:SendMessage) and the Lambda event source mapping."
@@ -46,4 +47,9 @@ output "message_retention_seconds" {
 output "dlq_message_retention_seconds" {
   description = "Retention of the DLQ, in seconds. Consumed by modules/ingest to derive HOT_RETENTION_DAYS."
   value       = aws_sqs_queue.dlq.message_retention_seconds
+}
+
+output "visibility_timeout_seconds" {
+  description = "Visibility timeout of the ingest queue, in seconds (6 x consumer timeout + batching window, ADR-0011). Consumed by modules/observability to derive the queue-age alarm threshold."
+  value       = aws_sqs_queue.ingest.visibility_timeout_seconds
 }

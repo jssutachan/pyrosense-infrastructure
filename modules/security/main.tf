@@ -73,11 +73,12 @@ data "aws_iam_policy_document" "key" {
   # trailing "*" on GenerateDataKey is load-bearing: AWS has documented alarm
   # failures caused by granting only the exact action name.
   #
-  # StringEqualsIfExists, not StringEquals: it is unverified whether CloudWatch
-  # populates aws:SourceAccount on its KMS calls. With StringEquals, a missing
-  # key silently denies and the alarm never fires. IfExists enforces the value
-  # when present and does not block when absent. Tighten to StringEquals only
-  # after confirming the key appears in CloudTrail (see ADR-0010).
+  # Confused-deputy guard as the SNS key-management guide documents it for
+  # service principals: the call must come from an alarm in this account and
+  # region. StringEquals (not IfExists): a missing key now denies. Hardened
+  # after the first real alarm proved the path with the IfExists version
+  # (observability cycle, debt #30); a second alarm test proved both keys are
+  # present. Revision trigger: an alarm action failure in describe-alarm-history.
   statement {
     sid    = "AllowCloudWatchAlarms"
     effect = "Allow"
@@ -93,9 +94,15 @@ data "aws_iam_policy_document" "key" {
     }
 
     condition {
-      test     = "StringEqualsIfExists"
+      test     = "StringEquals"
       variable = "aws:SourceAccount"
       values   = [local.account_id]
+    }
+
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values   = ["arn:${local.partition}:cloudwatch:${local.region}:${local.account_id}:alarm:*"]
     }
   }
 
