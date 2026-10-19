@@ -1,0 +1,102 @@
+[
+    {
+        "name": "pyrosense-demo-alert-publish-failures",
+        "state": "OK",
+        "namespace": "PyroSense/Ingest",
+        "metric": "AlertPublishFailures",
+        "statistic": "Sum",
+        "threshold": 1.0,
+        "operator": "GreaterThanOrEqualToThreshold",
+        "missing": "notBreaching"
+    },
+    {
+        "name": "pyrosense-demo-dlq-not-empty",
+        "state": "ALARM",
+        "namespace": "AWS/SQS",
+        "metric": "ApproximateNumberOfMessagesVisible",
+        "statistic": "Maximum",
+        "threshold": 1.0,
+        "operator": "GreaterThanOrEqualToThreshold",
+        "missing": "ignore"
+    },
+    {
+        "name": "pyrosense-demo-fire-alert-delivery-failures",
+        "state": "OK",
+        "namespace": "AWS/SNS",
+        "metric": "NumberOfNotificationsFailed",
+        "statistic": "Sum",
+        "threshold": 1.0,
+        "operator": "GreaterThanOrEqualToThreshold",
+        "missing": "notBreaching"
+    },
+    {
+        "name": "pyrosense-demo-iot-publish-auth-errors",
+        "state": "ALARM",
+        "namespace": "AWS/IoT",
+        "metric": "PublishIn.AuthError",
+        "statistic": "Sum",
+        "threshold": 1.0,
+        "operator": "GreaterThanOrEqualToThreshold",
+        "missing": "notBreaching"
+    },
+    {
+        "name": "pyrosense-demo-iot-rule-sqs-failures",
+        "state": "OK",
+        "namespace": "AWS/IoT",
+        "metric": "Failure",
+        "statistic": "Sum",
+        "threshold": 1.0,
+        "operator": "GreaterThanOrEqualToThreshold",
+        "missing": "notBreaching"
+    },
+    {
+        "name": "pyrosense-demo-lambda-errors",
+        "state": "OK",
+        "namespace": "AWS/Lambda",
+        "metric": "Errors",
+        "statistic": "Sum",
+        "threshold": 1.0,
+        "operator": "GreaterThanOrEqualToThreshold",
+        "missing": "notBreaching"
+    },
+    {
+        "name": "pyrosense-demo-lambda-throttles",
+        "state": "OK",
+        "namespace": "AWS/Lambda",
+        "metric": "Throttles",
+        "statistic": "Sum",
+        "threshold": 1.0,
+        "operator": "GreaterThanOrEqualToThreshold",
+        "missing": "notBreaching"
+    },
+    {
+        "name": "pyrosense-demo-queue-oldest-message-age",
+        "state": "ALARM",
+        "namespace": "AWS/SQS",
+        "metric": "ApproximateAgeOfOldestMessage",
+        "statistic": "Maximum",
+        "threshold": 360.0,
+        "operator": "GreaterThanThreshold",
+        "missing": "notBreaching"
+    },
+    {
+        "name": "pyrosense-demo-telemetry-silence",
+        "state": "ALARM",
+        "namespace": "AWS/IoT",
+        "metric": "TopicMatch",
+        "statistic": "Sum",
+        "threshold": 1.0,
+        "operator": "LessThanThreshold",
+        "missing": "breaching"
+    },
+    {
+        "name": "pyrosense-demo-transient-failures",
+        "state": "OK",
+        "namespace": "PyroSense/LogSignals/demo",
+        "metric": "TransientFailures",
+        "statistic": "Sum",
+        "threshold": 1.0,
+        "operator": "GreaterThanOrEqualToThreshold",
+        "missing": "notBreaching"
+    }
+]

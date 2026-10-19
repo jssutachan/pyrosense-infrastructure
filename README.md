@@ -1,125 +1,124 @@
 # PyroSense 🔥
 
-> Serverless, event-driven platform for **early wildfire detection** and
-> **multi-stakeholder alerting**, built on AWS with 100% Infrastructure as Code.
+> Serverless, event-driven AWS platform for **early wildfire detection** and **multi-stakeholder alerting**: sensors report, the cloud decides, the right people get alerted in seconds.
 
-**Status:** 🚧 Active development — building the `v1.0-serverless` MVP.
-The ingest core (Python Lambda) is complete and fully tested, and every data
-path has been verified in deploy/destroy cycles: the FinOps guardrail is
-deployed; the pipeline encryption key, the SQS messaging module, the storage
-module (DynamoDB hot table + S3 raw archive), the alerting module (SNS
-fire-risk and operations topics), the IoT Core boundary (device identity +
-topic rule into SQS) and the ingest Lambda (SQS event source, least-privilege
-role) have been verified, the last one end to end from an MQTT publish to an
-alert email. The observability module (CloudWatch alarms into the operations
-topic, log metric filters, dashboard) is code complete and pending its
-deploy/destroy cycle.
+**Status:** the v1.0 serverless core is complete. All eight infrastructure modules have been **deployed, tested end to end on real AWS and destroyed**: 15,110 messages processed, **0 lost**, with the evidence published in this repository. Next stage: CI/CD with GitHub Actions.
+
+| [▶ Test evidence](docs/evidence/README.md) | [Production readiness](docs/production-readiness.md) | [Design decisions](docs/adr/) |
+|---|---|---|
 
 ---
 
-## Context
+## Why this project exists
 
-Bogotá's *Cerros Orientales* burned during the January 2024 wildfire season,
-exposing gaps in how emergency and environmental agencies detect and coordinate
-around early-stage fires. PyroSense is a portfolio-grade reference platform that
-explores how a serverless, event-driven architecture on AWS could ingest sensor
-telemetry, run detection logic in the cloud, and fan out alerts to the relevant
-institutional stakeholders (e.g. Bomberos Bogotá, IDIGER, SDA, CAR, EAAB).
+In January 2024 wildfires burned the *Cerros Orientales*, the forested hills on Bogotá's eastern edge. The response exposed a familiar gap: by the time a fire is visible, it is already large, and the agencies involved (Bomberos Bogotá, IDIGER, the city's environmental authority SDA, the regional authority CAR and the water utility EAAB) learn about it through different channels at different times.
 
-> **Not a production system.** Devices are simulated (no physical hardware).
-> This repository is an engineering artifact designed to demonstrate cloud
-> architecture, IaC and DevOps practices end to end.
+PyroSense explores how a cloud platform could close that gap: a network of sensors on the hillsides reports temperature, humidity and smoke; the cloud evaluates every reading, and a critical one becomes an alert to the duty desk within seconds, while every reading is kept for later analysis.
 
----
+**This is a portfolio and learning project, built to a production standard.** It runs on simulated sensors and is deployed only for test cycles, but it is not a tutorial copy. Every decision was made the way a production team would make it:
 
-## What it does (target flow)
-
-A simulated IoT sensor fleet publishes environmental telemetry. The cloud —
-not the sensor — decides what constitutes a fire condition, correlates signals,
-and dispatches alerts to subscribed stakeholders while persisting history for
-later analysis.
-
-> **Design principle:** sensors *report conditions*, they do not *make
-> decisions*. Alert logic lives in the cloud.
+- **Designed for production, deployed for demo.** The architecture is sized for a real fleet of about 500 sensors; the deployment is ephemeral and costs cents. Nothing in the design was simplified because the deployment is small.
+- **Grounded in a real problem.** The scenario, the stakeholders and the failure modes come from the actual 2024 event, which is why the limitations of this design are documented as carefully as its features ([production readiness](docs/production-readiness.md)).
+- **Every non-trivial decision is written down.** 21 Architecture Decision Records state the context, the decision, the alternatives rejected and when to revisit it.
+- **Nothing is claimed without evidence.** Each module was deployed, exercised against real AWS services, verified and destroyed before it was merged; the full system was then tested end to end, including injected failures.
+- **AI-assisted, human-owned.** AI tools drafted parts of the code. Every draft was reviewed against the official AWS and Terraform documentation before it was accepted, and the drafts that were wrong were rejected and the reasons recorded: a private key stored in Terraform state, a device policy that would have denied every real sensor, an alarm configuration that could never fire, among others.
 
 ---
 
-## Reference architecture
+## Proof it works
+
+The complete system was deployed from nothing and tested for several hours on AWS. Full report, raw data and charts: **[docs/evidence/](docs/evidence/README.md)**.
+
+| What was tested | Result |
+|---|---|
+| Messages through the real pipeline | **15,110 stored, 0 lost**, reconciled across IoT Core, SQS, Lambda, DynamoDB and S3 |
+| 502 simulated sensors over MQTT with mutual TLS (X.509) | 10,040 messages, 0 missing · reading safely archived in p95 **1.06 s** |
+| 5,000-message burst (a fleet reconnecting after an outage) | absorbed by the queue and drained in 273 s · 0 errors, 0 throttles |
+| Fire scenario: 5 sensors report critical smoke | 5 alerts, one per sensor, published in p50 **1.18 s** · repeated readings suppressed |
+| Injected failures: invalid payload, consumer outage, broken permission, lost alert | 4 of 4 detected and paged to the operator · no data lost |
+| Security probes: other environment, impersonated device, unencrypted HTTP | 3 of 3 denied · 9 of 9 data stores encrypted with a customer-managed key |
+| Monitoring | 10 of 10 alarms delivered their notification · a leftover from a test was caught by the drift check and fixed |
+| Code quality | 95 tests · Terraform validate, TFLint, Trivy and gitleaks clean on the tested commit |
+
+![Every boundary of the pipeline agrees during the 502-sensor run](docs/evidence/v1.0-2026-10-15/charts/01-edge-to-storage.png)
+
+---
+
+## How it works
 
 ```mermaid
 flowchart LR
-    subgraph Edge["Simulated fleet"]
-        S["IoT sensors<br/>(MQTT / X.509)"]
-    end
-
-    S -->|MQTT| IOT["AWS IoT Core"]
-    IOT -->|IoT Rule| SQS["SQS + DLQ<br/>buffered ingest"]
-    SQS --> L["Lambda<br/>(ingest + detection)"]
-    L --> DDB[("DynamoDB<br/>hot state")]
-    L --> SNS["SNS<br/>alert fan-out"]
-    SNS --> SUB["Stakeholder<br/>subscribers"]
-    L --> S3[("S3<br/>cold storage")]
-    S3 --> ATH["Athena<br/>historical analysis"]
-
-    CW["CloudWatch<br/>logs + metrics + alarms"]
-    L -.-> CW
-    IOT -.-> CW
-    SQS -.-> CW
-    CW -->|alarm actions| OPS["SNS ops topic<br/>(operators, email)"]
-
-    subgraph Crypto["Encryption at rest"]
-        KMS["KMS CMK<br/>modules/security"]
-    end
-
-    SQS -.->|SSE-KMS| KMS
-    DDB -.->|SSE-KMS| KMS
-    SNS -.->|SSE-KMS| KMS
-    S3 -.->|SSE-KMS| KMS
-    CW -.->|SSE-KMS| KMS
-    OPS -.->|SSE-KMS| KMS
+    S["Sensors<br/>(MQTT · X.509 mutual TLS)"] --> IOT["AWS IoT Core<br/>device policy + topic rule"]
+    IOT --> Q["SQS queue<br/>+ dead-letter queue"]
+    IOT -. "rule error" .-> ERR["Error log<br/>(replayable)"]
+    Q --> L["Lambda<br/>validate · evaluate risk"]
+    L --> S3[("S3<br/>raw archive")]
+    L --> DDB[("DynamoDB<br/>recent readings")]
+    L -->|"critical smoke"| FIRE["SNS fire alerts<br/>→ duty desk"]
+    CW["CloudWatch<br/>10 alarms · dashboard"] -->|"page"| OPS["SNS ops alarms<br/>→ operator"]
+    IOT & Q & L & FIRE -.-> CW
+    Q & S3 & DDB & FIRE & OPS & ERR -. "SSE-KMS" .-> KMS["KMS customer-managed key<br/>(modules/security)"]
 ```
 
-> The diagram reflects the **target** design; components are added to this repo
-> path by path. See the roadmap for current build status.
+<details>
+<summary><b>Why the encryption arrows point toward KMS</b></summary>
 
-> Encryption arrows point **toward** KMS because that is the direction of the
-> calls: each service requests a data key from KMS on the caller's behalf. This
-> is why a consuming role needs `kms:GenerateDataKey` and `kms:Decrypt` in its
-> own IAM policy even though the application code never mentions KMS. IoT Core
-> is absent from that group on purpose — its message broker does not persist
-> messages, so there is nothing at rest to encrypt. (ADR-0010)
-> The IoT topic rule's *role* is a different matter: it writes into the
-> CMK-encrypted queue, so like any other producer it carries
-> `kms:GenerateDataKey` and `kms:Decrypt` in its own IAM policy
-> (`modules/iot`).
+Encryption arrows point **toward** KMS because that is the direction of the calls: each service requests a data key from KMS on the caller's behalf. That is why a consuming role needs `kms:GenerateDataKey` and `kms:Decrypt` in its own IAM policy even though the application code never mentions KMS (ADR-0010). IoT Core's message broker does not persist messages, so there is nothing at rest to encrypt there. The IoT topic rule's *role* is a different matter: it writes into the encrypted queue, so, like any other producer, it carries those two permissions in its own policy (`modules/iot`).
+
+</details>
+
+1. **The edge.** Each reading is published over MQTT, authenticated with an X.509 certificate. An IoT policy allows the fleet to publish only to telemetry topics of its own environment, with well-formed sensor IDs; anything else is denied and counted.
+2. **The buffer.** An IoT topic rule forwards every message, unmodified, to an encrypted SQS queue. The queue absorbs bursts and retries failures, so a slow or failing consumer never loses data.
+3. **The decision.** A Lambda function re-validates each reading against a strict data contract, archives the raw message in S3, stores it in DynamoDB, and, if smoke crosses the critical threshold, publishes a fire alert. A sensor that keeps reporting smoke produces one alert per 30 minutes, not one per reading.
+4. **The watch.** Ten CloudWatch alarms cover every boundary: silence from the fleet, rejected devices, rule failures, queue backlog, dead-lettered messages, Lambda errors and throttles, per-message failures, lost alerts and undelivered alerts. Each one pages the operator.
+
+> **Design principle:** sensors report conditions; they do not decide. The detection logic lives in the cloud, where it can be changed, audited and correlated across sensors.
+
+---
+
+## Designed not to lose a message
+
+Losing a fire reading is the worst failure this system can have, so every point where a message could disappear has a protection, and each protection was tested.
+
+| Where a message could be lost | Protection | Proven by |
+|---|---|---|
+| Device sends to the wrong place or with the wrong identity | Denied by the IoT policy and **counted**; an alarm pages on any denial | Security probes (E5) |
+| The IoT rule cannot write to the queue | The message is kept in an encrypted error log and can be replayed byte for byte; an alarm pages | Injected failure E4c |
+| The consumer stops or falls behind | Messages wait in the queue (4-day retention); a backlog-age alarm pages | Injected failure E4b |
+| A message keeps failing | Retried 5 times, then kept in a dead-letter queue (14 days) for triage; an alarm pages | Injected failure E4a |
+| Duplicate delivery (MQTT QoS 1 and SQS are at-least-once) | Idempotent writes: each reading is stored exactly once | Ledger: stored = received |
+| A dependency fails for one message (S3, DynamoDB, KMS…) | Only that message is retried; an alarm pages when failures persist | Partial batch responses, E4d |
+| The fire alert cannot be published | Detected, logged with the sensor ID and paged; recovery is manual in v1.0 | Injected failure E4d |
+| The whole fleet goes silent | A heartbeat alarm pages after 10 minutes without readings | Observed throughout the run |
+
+What this design does **not** yet guarantee is speed under failure: a message that fails repeatedly can take about 15 minutes to reach the dead-letter queue. For a fire, 15 minutes matters. That gap, and the others a real deployment would have to close, are in **[production readiness](docs/production-readiness.md)**.
+
+---
+
+## Demo vs. production (ADR-0002)
+
+> **"Design for production, deploy for demo."**
+
+The architecture is designed for a production fleet, but deployed ephemerally at near-zero cost: each test cycle creates the stack, exercises it and destroys it, and only a budget alarm stays in the account. Terraform is parametrized for both environments (`demo` / `prod` through `.tfvars`), and everything that differs between them is an explicit variable with a safe default, so the difference is visible in a diff rather than hidden in code. The limits that come from deploying small are measured and listed in [observed limits](docs/evidence/v1.0-2026-10-15/observed-limits.md); a production cost model with AWS Pricing Calculator is a planned stage.
 
 ---
 
 ## Tech stack
 
-| Layer                | Choice                                                       |
-| -------------------- | ----------------------------------------------------------- |
-| Ingestion            | AWS IoT Core (MQTT, X.509 mutual TLS, topic rule → SQS)     |
-| Buffering            | Amazon SQS standard queue (+ DLQ), SSE-KMS, partial batch responses |
-| Compute              | AWS Lambda (Python 3.12, arm64, stdlib only), SQS event source with partial batch responses |
-| Hot state            | Amazon DynamoDB (single-table, TTL, PITR, SSE-KMS)          |
-| Alerting             | Amazon SNS                                                  |
-| Cold storage / query | Amazon S3 (SSE-KMS + bucket key, versioned) + Amazon Athena (planned) |
-| Observability        | Amazon CloudWatch (JSON logs, EMF metrics, log metric filters, 10 alarms → encrypted SNS ops topic, pipeline dashboard) |
-| IaC                  | Terraform (remote S3 backend, native state locking)        |
-| CI/CD                | GitHub Actions                                              |
-| Quality gate         | `terraform fmt/validate`, tflint, trivy, gitleaks, ruff, mypy, pytest (≥90% coverage) |
-
----
-
-## Demo vs. Production (ADR-0002)
-
-> **"Design for production, deploy for demo."**
-
-The architecture is designed and cost-modeled at production scale, but deployed
-ephemerally at near-zero cost. Terraform is parametrized (`demo` / `prod` via
-`.tfvars`) and the cost model is documented in two columns — *demo actual* vs.
-*production projected* — so ambition is never traded away for budget.
+| Layer | Choice |
+|---|---|
+| Ingestion | AWS IoT Core: MQTT, X.509 mutual TLS, topic rule → SQS, error action to a dedicated log |
+| Buffering | Amazon SQS standard queue + dead-letter queue, SSE-KMS, TLS-only policy |
+| Compute | AWS Lambda: Python 3.12, arm64 (Graviton), standard library only, SQS event source with partial batch responses |
+| Hot state | Amazon DynamoDB: single-table design, conditional writes, TTL, point-in-time recovery |
+| Cold storage | Amazon S3: raw archive, SSE-KMS with bucket key, versioning, public access blocked |
+| Alerting | Amazon SNS: separate fire-alert and operations topics, both KMS-encrypted |
+| Observability | Amazon CloudWatch: 10 alarms, log metric filters, embedded metrics (EMF), dashboard |
+| Security | AWS KMS customer-managed key with rotation · least-privilege IAM with KMS conditions · TLS enforced by policy |
+| Cost control | AWS Budgets guardrail · ephemeral deployments |
+| Infrastructure as Code | Terraform ≥ 1.11, 8 modules, remote S3 state with native locking |
+| Quality gate | terraform fmt/validate, TFLint, Trivy, gitleaks, ruff, mypy (strict), pytest + moto, pre-commit |
+| CI/CD | GitHub Actions: Python checks today; Terraform pipeline with OIDC next |
 
 ---
 
@@ -128,31 +127,30 @@ ephemerally at near-zero cost. Terraform is parametrized (`demo` / `prod` via
 ```text
 .
 ├── README.md
-├── Makefile                 # task shortcuts (test, lint, plan, apply)
-├── pyproject.toml           # Python tooling config (ruff, mypy, pytest, coverage)
-├── trivy.yaml               # scanner config (shared by local runs and CI)
-├── .tflint.hcl              # lint ruleset
-├── main.tf outputs.tf variables.tf versions.tf providers.tf
-├── demo.tfvars prod.tfvars  # per-environment inputs (examples committed)
-├── bootstrap/               # one-time remote backend (S3 state) setup
-├── config/                  # backend / shared configuration
+├── Makefile                   # task shortcuts; `make check` runs the full static gate
+├── pyproject.toml             # Python tooling (ruff, mypy, pytest, coverage)
+├── trivy.yaml  .tflint.hcl    # scanner and lint configuration (shared by local runs and CI)
+├── main.tf  variables.tf  outputs.tf  versions.tf  providers.tf   # root: composition only
+├── demo.tfvars.example  prod.tfvars.example                       # per-environment inputs (real ones are gitignored)
+├── bootstrap/state-backend/   # one-time remote state bucket
+├── config/                    # backend configuration (example committed)
+├── modules/                   # one folder per concern, each with its README
+│   ├── budgets/               # account-wide cost guardrail
+│   ├── security/              # pipeline KMS key and key policy
+│   ├── messaging/             # SQS queue + dead-letter queue
+│   ├── storage/               # DynamoDB table + S3 archive
+│   ├── alerting/              # SNS fire-alert and operations topics
+│   ├── iot/                   # device identity, IoT policy, topic rule → SQS
+│   ├── ingest/                # Lambda consumer, its role, the SQS event source
+│   └── observability/         # alarms, log metric filters, dashboard
+├── src/ingest_lambda/         # Lambda source (Python 3.12, stdlib only)
+├── tests/                     # pytest suite (moto: no AWS account needed)
+├── scripts/                   # operator helpers; scripts/iot has the MQTT test publisher
 ├── docs/
-│   ├── adr/                 # Architecture Decision Records
-│   └── evidence/            # evidence for destroyed resources
-├── modules/                 # reusable Terraform modules (AWS infra)
-│   ├── budgets/             # account-wide FinOps guardrail
-│   ├── security/            # pipeline KMS key + key policy
-│   ├── messaging/           # SQS ingest queue + DLQ (see its README)
-│   ├── storage/             # DynamoDB hot table + S3 raw archive (see its README)
-│   ├── alerting/            # SNS fire-risk + operations topics (see its README)
-│   ├── iot/                 # IoT Core device identity + topic rule → SQS (see its README)
-│   ├── ingest/              # ingest Lambda, its role and the SQS event source (see its README)
-│   └── observability/       # CloudWatch alarms, log metric filters, dashboard (see its README)
-├── scripts/                 # helper scripts
-├── src/
-│   └── ingest_lambda/       # Python 3.12 Lambda source (see its README)
-├── tests/                   # pytest suite for the Lambda (see its README)
-└── .github/workflows/       # CI/CD pipelines
+│   ├── adr/                   # Architecture Decision Records
+│   ├── evidence/              # end-to-end test evidence (start here)
+│   └── production-readiness.md
+└── .github/workflows/         # CI
 ```
 
 ---
@@ -161,98 +159,90 @@ ephemerally at near-zero cost. Terraform is parametrized (`demo` / `prod` via
 
 **Prerequisites**
 
-- AWS account with programmatic access
-- AWS CLI ≥ 2.32.0 (uses `aws login` for temporary, auto-refreshing credentials)
-- Terraform ≥ 1.11 (native S3 state locking via `use_lockfile = true`)
-- **Python 3.12** (the Lambda runtime target — the test suite requires 3.12+)
-- Quality gate tooling: `tflint`, `trivy`, `pre-commit`, and `jq` (used to
-  inspect the JSON plan before apply)
-- `openssl`, to generate the IoT fleet client's key pair and CSR locally
-  (see `modules/iot/README.md`)
+- An AWS account with programmatic access.
+- AWS CLI ≥ 2.32.0 (`aws login` for temporary, auto-refreshing credentials; no long-lived access keys).
+- Terraform ≥ 1.11 (native S3 state locking with `use_lockfile = true`).
+- **Python 3.12**, the Lambda runtime target; the test suite requires 3.12 or newer.
+- Quality gate tooling: `tflint`, `trivy`, `pre-commit`, and `jq` to inspect the plan before applying.
+- `openssl`, to generate the device key pair and certificate request locally (see `modules/iot/README.md`).
 
-**Run the Lambda test suite**
+**Run the test suite** (no AWS account needed):
 
 ```bash
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
-pytest              # 91 tests, ≥90% coverage
+pytest              # 95 tests
 ```
 
-> The suite runs entirely against an in-memory AWS (moto): no account, no
-> credentials, no cost. See `tests/README.md`.
+> The suite runs entirely against an in-memory AWS (moto): no account, no credentials, no cost. See `tests/README.md`.
 
-**Deploy the infrastructure**
+**Deploy** (creates billable resources; destroy them when you are done):
 
-The backend bucket is created once by `bootstrap/state-backend` — see that
-directory's README. The IoT module also needs the fleet client's CSR on disk
-before the first plan (`iot_fleet_client_csr_path`; runbook in
-`modules/iot/README.md`). Once `config/backend.hcl` and the CSR exist:
+1. Create the state bucket once with `bootstrap/state-backend` (see its README) and write `config/backend.hcl` from the example.
+2. Copy `demo.tfvars.example` to `demo.tfvars` and set your own email recipients.
+3. Generate the device key pair and certificate request locally; the private key never enters Terraform (see `modules/iot/README.md`).
+4. Then:
 
 ```bash
 terraform init -backend-config=config/backend.hcl
-make check                                          # the full static gate
+make check                                         # the full static quality gate
 terraform plan -var-file=demo.tfvars -out=tfplan
 terraform apply tfplan
 ```
 
+5. Confirm the two email subscriptions **from the CLI**, not by clicking the link (see `scripts/alerting/`), and send test telemetry with `scripts/iot/`.
+
 > Re-run `terraform init` whenever a new module block is added to `main.tf`.
 
-> Inspect the plan before applying. A green static gate does not prove the plan
-> contains what you expect — verify the artifact itself:
+> Inspect the plan before applying. A green static gate does not prove the plan contains what you expect, so verify the artifact itself:
 >
 > ```bash
 > terraform show -json tfplan | jq -r '.resource_changes[].address'
 > ```
+>
+> Never commit `tfplan`: a saved plan contains sensitive values in clear text.
 
 ---
 
-## Roadmap & status
+## Roadmap
 
-PyroSense is built in phased stages toward `v1.0-serverless`. Detection → alerting
-is prioritized over cold storage to ship the core value slice first. Live status
-is tracked in the project log.
-
-| Area                                           | Status |
-| ---------------------------------------------- | ------ |
-| Ingest core (Python Lambda)                    | ✅ Complete, tested (91 tests, ~99% coverage) |
-| CI quality gate (Actions)                      | ✅ Lint + types + tests on every push |
-| Remote state backend                           | ✅ Deployed |
-| FinOps guardrail (budgets)                     | ✅ Deployed |
-| Encryption key (KMS)                           | ✅ Verified in a deploy/destroy cycle |
-| Messaging (SQS + DLQ)                          | ✅ Verified in a deploy/destroy cycle |
-| Storage (DynamoDB + S3)                        | ✅ Verified in a deploy/destroy cycle |
-| Alerting (SNS) end to end                      | ✅ Verified in a deploy/destroy cycle |
-| IoT Core boundary (identity + rule → SQS)      | ✅ Verified in a deploy/destroy cycle |
-| Ingest Lambda (SQS → Lambda)                   | 🟡 Code complete, pending deploy/destroy cycle |
-| Observability (alarms, dashboard)              | ⬜ Planned |
-| Terraform CI workflow + OIDC                   | ⬜ Planned |
-| Historical analysis (Athena)                   | ⬜ Planned |
+| Area | Status |
+|---|---|
+| Lambda consumer (Python) | ✅ Complete · 95 tests |
+| CI quality gate (GitHub Actions) | ✅ Python lint, types and tests on every push |
+| Remote state backend · cost guardrail | ✅ Deployed |
+| Encryption · messaging · storage · alerting · IoT · ingest · observability | ✅ Each verified in its own deploy/destroy cycle |
+| End-to-end evidence run (whole system on AWS) | ✅ [Published](docs/evidence/README.md) |
+| CI/CD: Terraform pipeline with GitHub Actions and OIDC | ⬜ **Next** |
+| Production cost model (AWS Pricing Calculator) | ⬜ Planned |
+| Historical analysis (Athena over the S3 archive) | ⬜ Planned |
+| Production hardening | ⬜ See [production readiness](docs/production-readiness.md) |
 
 ---
 
 ## Design decisions
 
-Significant decisions are documented as ADRs under `docs/adr/`. Current set:
+Every significant decision is an ADR under [`docs/adr/`](docs/adr/).
 
 | # | Decision |
 |---|---|
 | 0001 | Remote state on S3 with native lockfile locking |
 | 0002 | Design for production, deploy for demo |
-| 0003 | Account-wide monthly budget as the FinOps guardrail |
-| 0004 | Lint tags at the provider, not per resource |
+| 0003 | Account-wide monthly budget as the cost guardrail |
+| 0004 | Tags set once at the provider, not per resource |
 | 0005 | Alert suppression: race-free slot, claimed before publishing |
 | 0006 | Contract-first re-validation at the consumer boundary |
 | 0007 | Dependency-free Lambda (standard library only) |
 | 0008 | At-least-once delivery handled by idempotent conditional writes |
 | 0009 | Observability: JSON logs on stderr, EMF metrics on stdout |
 | 0010 | A single customer-managed KMS key for the whole pipeline |
-| 0011 | Ingest buffer retry contract: consumer-derived visibility timeout, DLQ outlives its source |
-| 0012 | Permanent (contract) failures stay on the SQS retry path |
-| 0013 | Storage: single-table key design and a flat (non-tiered) cold archive |
+| 0011 | Retry contract: visibility timeout derived from the consumer, dead-letter queue outlives its source |
+| 0012 | Permanent (contract) failures stay on the retry path |
+| 0013 | Storage: single-table key design and a flat cold archive |
 | 0014 | Alerting: one module with two purpose-built topics, keyed by recipient labels |
 | 0015 | Email as the only alert channel in v1.0, scoped as non-life-safety |
-| 0016 | IoT: one fleet-client identity and one IoT policy |
-| 0017 | IoT: device certificate issued from a CSR inside Terraform; private key never in state |
+| 0016 | IoT: one fleet identity and one IoT policy |
+| 0017 | IoT: device certificate issued from a CSR; private key never in Terraform state |
 | 0018 | IoT: topic rule → SQS, no filtering, error action to a dedicated log group |
 | 0019 | Ingest consumer: runtime, configuration contract, concurrency and IAM scoping |
 | 0020 | Detection policy: ownership and provisional values |
@@ -262,4 +252,4 @@ Significant decisions are documented as ADRs under `docs/adr/`. Current set:
 
 ## License
 
-For license information check the LICENSE file.
+See [LICENSE](LICENSE).

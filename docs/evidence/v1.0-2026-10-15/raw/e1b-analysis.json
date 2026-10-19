@@ -1,0 +1,16 @@
+{
+  "published_ok": 10040,
+  "archived": 10040,
+  "missing": 0,
+  "missing_sample": [],
+  "publish_span_s": 1583.3,
+  "publish_rate_msg_s": 6.34,
+  "device_to_archive_latency_s": {
+    "n": 10040,
+    "min": 0.07,
+    "p50": 0.6,
+    "p95": 1.06,
+    "p99": 1.12,
+    "max": 2.71
+  }
+}

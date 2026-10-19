@@ -1,0 +1,242 @@
+{
+  "pyrosense-demo-alert-publish-failures": [
+    {
+      "timestamp": "2026-10-15T15:34:15.253000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T15:34:15.220000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from ALARM to OK"
+    },
+    {
+      "timestamp": "2026-10-15T15:31:15.304000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T15:31:15.222000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from OK to ALARM"
+    }
+  ],
+  "pyrosense-demo-dlq-not-empty": [
+    {
+      "timestamp": "2026-10-15T15:44:54.140000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T15:44:54.071000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from OK to ALARM"
+    },
+    {
+      "timestamp": "2026-10-15T13:58:54.143000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T13:58:54.071000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from INSUFFICIENT_DATA to OK"
+    }
+  ],
+  "pyrosense-demo-fire-alert-delivery-failures": [
+    {
+      "timestamp": "2026-10-15T16:36:36.504000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T16:36:36.467000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from ALARM to OK"
+    },
+    {
+      "timestamp": "2026-10-15T16:35:36.107000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T16:35:36.054000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from OK to ALARM"
+    }
+  ],
+  "pyrosense-demo-iot-publish-auth-errors": [
+    {
+      "timestamp": "2026-10-15T16:31:57.593000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T16:31:57.504000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from OK to ALARM"
+    }
+  ],
+  "pyrosense-demo-iot-rule-sqs-failures": [
+    {
+      "timestamp": "2026-10-15T15:55:24.897000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T15:55:24.846000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from ALARM to OK"
+    },
+    {
+      "timestamp": "2026-10-15T15:50:24.918000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T15:50:24.848000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from OK to ALARM"
+    }
+  ],
+  "pyrosense-demo-lambda-errors": [
+    {
+      "timestamp": "2026-10-15T16:36:15.983000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T16:36:15.948000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from ALARM to OK"
+    },
+    {
+      "timestamp": "2026-10-15T16:35:24.446000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T16:35:24.364000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from OK to ALARM"
+    }
+  ],
+  "pyrosense-demo-lambda-throttles": [
+    {
+      "timestamp": "2026-10-15T16:36:04.979000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T16:36:04.940000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from ALARM to OK"
+    },
+    {
+      "timestamp": "2026-10-15T16:35:30.067000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T16:35:30.020000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from OK to ALARM"
+    }
+  ],
+  "pyrosense-demo-queue-oldest-message-age": [
+    {
+      "timestamp": "2026-10-15T16:14:40.042000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T16:14:39.977000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from OK to ALARM"
+    },
+    {
+      "timestamp": "2026-10-15T15:38:40.025000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T15:38:39.975000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from ALARM to OK"
+    },
+    {
+      "timestamp": "2026-10-15T15:37:40.060000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T15:37:39.975000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from OK to ALARM"
+    }
+  ],
+  "pyrosense-demo-telemetry-silence": [
+    {
+      "timestamp": "2026-10-15T16:24:53.423000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T16:24:53.342000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from OK to ALARM"
+    },
+    {
+      "timestamp": "2026-10-15T15:18:53.421000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T15:18:53.343000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from ALARM to OK"
+    },
+    {
+      "timestamp": "2026-10-15T14:59:53.420000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T14:59:53.342000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from OK to ALARM"
+    },
+    {
+      "timestamp": "2026-10-15T14:03:53.418000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T14:03:53.342000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from ALARM to OK"
+    }
+  ],
+  "pyrosense-demo-transient-failures": [
+    {
+      "timestamp": "2026-10-15T15:36:55.984000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T15:36:55.920000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from ALARM to OK"
+    },
+    {
+      "timestamp": "2026-10-15T15:33:55.986000-05:00",
+      "type": "Action",
+      "summary": "Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms"
+    },
+    {
+      "timestamp": "2026-10-15T15:33:55.921000-05:00",
+      "type": "StateUpdate",
+      "summary": "Alarm updated from OK to ALARM"
+    }
+  ]
+}

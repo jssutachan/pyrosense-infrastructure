@@ -1,0 +1,2 @@
+destroy_s=126
+apply_s=105

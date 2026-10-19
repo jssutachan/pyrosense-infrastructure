@@ -1,0 +1,28 @@
+# E4 checks, values as printed during the run (identifiers redacted)
+
+## E4a — poison message (published 2026-10-15T20:27:06Z)
+DLQ visible/in-flight: 1 0
+InvalidPayloads: 5.0
+dlq-not-empty: ALARM
+dlq-not-empty action history (since T0):
+  2026-10-15T13:58:54-05:00  Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms
+  2026-10-15T15:44:54-05:00  Successfully executed action arn:aws:sns:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ops-alarms
+
+## E4c — IoT rule cannot write to the queue (published 2026-10-15T20:48:47Z)
+Rule failures (AWS/IoT Failure, ActionType=SQS): 1.0
+Error documents (metric filter): 1.0
+iot-rule-sqs-failures: ALARM + email
+Replay from the error log vs original payload: IDENTICAL
+Replay SQS message id: 1d0d5fe7-4336-4dfa-a301-35051e4c805c
+Stored after replay: DEV#PYRO-T3-9010
+
+## E4b — consumer outage
+Event source mapping: Disabling -> Disabled
+Published during the outage: summary: sent=50 failed=0
+Queue during the outage: 50 visible, 0 in flight
+Oldest message age (max): 1427 s
+queue-oldest-message-age: ALARM + email
+Note: the re-enable step did not take effect; the drift check (E7) found the mapping disabled, it was re-enabled, all 50 messages were stored and the alarm returned to OK.
+
+## E2 — send timing
+Burst send window: 2026-10-15T19:47:20Z -> 2026-10-15T19:51:03Z (5000 messages in 500 batches, 0 failed entries)

@@ -1,0 +1,17 @@
+metric         expected   observed  result
+topicmatch        10111    10111.0  PASS
+success           10110    10110.0  PASS
+failure               1        1.0  PASS
+sent              15111    15111.0  PASS
+stored            15110     15110.  PASS
+invalid               5        5.0  PASS
+published             5        5.0  PASS
+suppressed            8        8.0  PASS
+pubfail               3        3.0  PASS
+transient             3        3.0  PASS
+ruleerr               1        1.0  PASS
+dlq          1 1
+dynamodb DEV# = stored  15110
+dynamodb ALERT#         8   (expected 8)
+s3 objects = stored     15110
+duplicates skipped      0.0
