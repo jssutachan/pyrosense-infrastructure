@@ -12,8 +12,13 @@
 # ------------------------------------------------------------------------------
 # Deployment context
 #
-# NOTE: aws_region and environment are consumed by providers.tf (region and
-# default_tags), not by main.tf — that is why they look "unused" in this file.
+# NOTE: aws_region is consumed only by providers.tf (region). environment
+# drives providers.tf (default_tags), local.name_prefix, the {env} MQTT topic
+# level (module.iot), the ENVIRONMENT setting and EMF dimension of the ingest
+# function (module.ingest), the alarm dimensions and log-metric namespace of
+# module.observability, and the cross-variable validation on
+# allow_data_destruction below. resource_prefix is consumed twice in main.tf:
+# local.name_prefix and module.iot's {base} MQTT topic level.
 # ------------------------------------------------------------------------------
 
 variable "aws_region" {
@@ -33,7 +38,7 @@ variable "environment" {
 }
 
 variable "resource_prefix" {
-  description = "Base name prefix for all resources, e.g. 'pyrosense'."
+  description = "Project identifier, e.g. 'pyrosense'. Prefixes every resource name and roots the MQTT topic tree ({base}/{env}/telemetry/{device_id})."
   type        = string
   default     = "pyrosense"
 
@@ -52,9 +57,33 @@ variable "budget_limit_usd" {
   type        = number
 }
 
-variable "ops_emails" {
-  description = "Recipients for budget alerts. At least one required (enforced in the budgets module)."
-  type        = list(string)
+# ------------------------------------------------------------------------------
+# Notification recipients — consumed by module.budgets and module.alerting
+# (ADR-0003, ADR-0014)
+#
+# Maps of { label = email }, not lists of addresses. Terraform always discloses
+# for_each keys in resource addresses, so alerting keys its subscriptions by
+# label: "pyrosense-demo-fire-alerts" subscriptions read
+# aws_sns_topic_subscription.fire_alerts["duty-desk"], never an address. Labels
+# also keep the keys stable — removing one recipient destroys exactly that one
+# subscription instead of shifting the rest.
+#
+# Both are sensitive and neither has a default: an address is PII (standard
+# #11), and there is no safe fallback recipient. Running plan without a
+# -var-file fails, which is the conservative outcome. Validated in
+# module.alerting (shape, label format, address format, no duplicates).
+# ------------------------------------------------------------------------------
+
+variable "ops_recipients" {
+  description = "Platform operators, as { label = email }. Receive budget notifications (module.budgets) and CloudWatch alarm notifications (module.alerting ops topic). One intent, one input: these are the people who run the platform."
+  type        = map(string)
+  sensitive   = true
+}
+
+variable "fire_alert_recipients" {
+  description = "Fire-risk alert responders, as { label = email }. A different audience from ops_recipients: in production these are duty desks at the responding institutions, not the platform team. Receive the CRITICAL alerts published by the ingest Lambda."
+  type        = map(string)
+  sensitive   = true
 }
 
 # ------------------------------------------------------------------------------
@@ -75,5 +104,45 @@ variable "kms_deletion_window_days" {
   validation {
     condition     = var.kms_deletion_window_days >= 7 && var.kms_deletion_window_days <= 30
     error_message = "kms_deletion_window_days must be between 7 and 30 inclusive (AWS KMS limit)."
+  }
+}
+
+# ------------------------------------------------------------------------------
+# Data lifecycle — consumed by module.storage (ADR-0013)
+# ------------------------------------------------------------------------------
+
+variable "allow_data_destruction" {
+  description = "Whether `terraform destroy` may delete stored data: true disables DynamoDB deletion protection and enables S3 force_destroy. Demo only (apply -> evidence -> destroy cycle, ADR-0002); must be false in production (ADR-0013)."
+  type        = bool
+
+  # Defaults to the production-safe value, same rule as
+  # kms_deletion_window_days: an apply without a -var-file must never
+  # produce a data store that destroy can wipe.
+  default = false
+
+  # Cross-variable rule (Terraform >= 1.9, and required_version is 1.11):
+  # the one combination that must never exist. A copy-paste slip in
+  # prod.tfvars fails at plan instead of at the first destroy.
+  validation {
+    condition     = !(var.environment == "prod" && var.allow_data_destruction)
+    error_message = "allow_data_destruction must be false when environment is 'prod'."
+  }
+}
+
+# ------------------------------------------------------------------------------
+# Device identity — consumed by module.iot (ADR-0017)
+# ------------------------------------------------------------------------------
+
+variable "iot_fleet_client_csr_path" {
+  description = "Path on the operator's machine to the PEM CSR of the IoT fleet client, e.g. ~/.config/pyrosense/certs/demo/fleet-client.csr. Only the CSR is read; the matching private key stays next to it and never enters Terraform (ADR-0017). Differs per environment: each environment has its own key pair."
+  type        = string
+
+  # No default: there is no safe fallback credential. A missing file fails at
+  # plan (file() needs it before the run), which is the conservative outcome.
+  # The CSR content is validated inside the module; this check only catches
+  # the most dangerous slip, pointing at the private key instead of the CSR.
+  validation {
+    condition     = !endswith(lower(var.iot_fleet_client_csr_path), ".key")
+    error_message = "iot_fleet_client_csr_path must point to the CSR, never to the private key (*.key)."
   }
 }

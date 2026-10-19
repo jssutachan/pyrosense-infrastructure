@@ -18,14 +18,28 @@ environment = "prod"
 # --- FinOps guardrail (modules/budgets, ADR-0003) -----------------------------
 
 # Sized for a real deployment: continuous telemetry from a deployed sensor
-# fleet, permanent S3 retention and production-grade DynamoDB capacity. This is
-# a monitoring threshold, not a spend commitment.
+# fleet, a permanently retained raw archive in S3 and an on-demand DynamoDB
+# table. This is a monitoring threshold, not a spend commitment.
 budget_limit_usd = 5000
 
-# Placeholder. In a real deployment this is an institutional distribution list
-# owned by the operations team, not an individual mailbox: alerts must survive
-# staff turnover.
-ops_emails = ["you@example.com"]
+# --- Notification recipients (modules/budgets + modules/alerting, ADR-0014) ---
+
+# Placeholders. In a real deployment these are institutional distribution lists
+# owned by their teams, not individual mailboxes: alerts must survive staff
+# turnover.
+#
+# The two maps are the production reason the topics are separate. Operators get
+# budget and CloudWatch alarm notifications — platform health. Responders get
+# CRITICAL fire alerts carrying device coordinates. A duty desk at Bomberos has
+# no business receiving a DLQ-depth alarm, and the platform team should not be
+# the path a fire alert travels through.
+ops_recipients = {
+  "platform-oncall" = "pyrosense-ops@example.org"
+}
+
+fire_alert_recipients = {
+  "bomberos-duty-desk" = "pyrosense-fire-duty@example.org"
+}
 
 # --- Encryption (modules/security, ADR-0010) ----------------------------------
 
@@ -33,3 +47,21 @@ ops_emails = ["you@example.com"]
 # item in DynamoDB and every queued message permanently unreadable. 30 days is
 # the widest window available to notice the mistake and cancel it.
 kms_deletion_window_days = 30
+
+
+# --- Data lifecycle (modules/storage, ADR-0013) -------------------------------
+
+# Explicit although it equals the default: this file documents production
+# intent. false keeps DynamoDB deletion protection on and S3 force_destroy
+# off, so destroy fails on a table or a bucket that holds data. Deleting prod
+# data takes two deliberate steps (flip, apply, then destroy), and the root
+# variable rejects true for prod at plan time anyway.
+allow_data_destruction = false
+
+# --- Device identity (modules/iot, ADR-0017) ----------------------------------
+
+# Its own key pair, never shared with demo: a leaked demo key must not open
+# production. In a real deployment no operator would hand-generate device CSRs;
+# devices would be onboarded through fleet provisioning, which is the revisit
+# trigger of ADR-0017. Listed so the demo/prod delta stays complete.
+iot_fleet_client_csr_path = "~/.config/pyrosense/certs/prod/fleet-client.csr"

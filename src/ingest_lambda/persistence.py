@@ -4,7 +4,7 @@ MQTT QoS 1 plus SQS standard queues mean at-least-once delivery: the same
 message can arrive twice (broker re-delivery, visibility timeout races,
 device reconnects replaying old readings). The conditional write on the
 ``device_id + seq`` key turns the hot-store insert into the idempotency
-guard (ADR-0004): the first delivery wins, replays are detected and
+guard (ADR-0008): the first delivery wins, replays are detected and
 skipped without error.
 """
 

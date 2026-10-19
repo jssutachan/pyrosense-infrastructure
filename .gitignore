@@ -6,7 +6,7 @@
 *.tfstate.*
 crash.log
 crash.*.log
-tfplan
+tfplan*
 *.tfplan
 *.tfplan.*
 *.tfvars
@@ -63,6 +63,7 @@ lambda_build/
 WINRY-BITACORA*.md
 ai-docs/
 docs/AI-Context*
+kms-key-policy-deployed.json
 
 # =====================================================================
 # Editor / IDE / OS
@@ -70,8 +71,10 @@ docs/AI-Context*
 .vscode/
 .idea/
 *.swp
-*~
 .DS_Store
 Thumbs.db
-#*#
-*~
+\#*#
+
+# Device CSRs are public material but pin one key pair; they live outside the
+# repository by design (ADR-0017) and should never be committed by accident.
+*.csr

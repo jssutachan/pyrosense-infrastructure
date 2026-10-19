@@ -1,0 +1,162 @@
+# Quality gate — commit 981aae6 — 2026-10-15T18:41:46Z
+fmt: OK
+[32m[1mSuccess![0m The configuration is valid.
+[0m
+tflint: OK
+terraform fmt -check -recursive
+terraform init -backend=false
+[0m[1mInitializing modules...[0m
+
+[0m[1mInitializing provider plugins...[0m
+- Reusing previous version of hashicorp/aws from the dependency lock file
+- Reusing previous version of hashicorp/archive from the dependency lock file
+- Using previously-installed hashicorp/archive v2.8.1
+- Using previously-installed hashicorp/aws v6.68.0
+
+
+[0m[1m[32mTerraform has been successfully initialized![0m[32m[0m
+[0m[32m
+You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.[0m
+[0m[1mInitializing provider plugins...[0m
+- Reusing previous version of hashicorp/aws from the dependency lock file
+- Using previously-installed hashicorp/aws v6.62.0
+
+
+[0m[1m[32mTerraform has been successfully initialized![0m[32m[0m
+[0m[32m
+You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.[0m
+terraform validate
+[32m[1mSuccess![0m The configuration is valid.
+[0m
+[32m[1mSuccess![0m The configuration is valid.
+[0m
+tflint --recursive --config "~/Documentos/pyrosense-infrastructure/.tflint.hcl"
+trivy config . --tf-vars demo.tfvars
+2026-10-15T13:42:09-05:00	INFO	Loaded	file_path="trivy.yaml"
+2026-10-15T13:42:09-05:00	INFO	[misconfig] Misconfiguration scanning is enabled
+2026-10-15T13:42:09-05:00	INFO	[checks-client] Using existing checks from cache	path="~/.cache/trivy/policy/content"
+2026-10-15T13:42:11-05:00	WARN	[rego] Module will be skipped as current version of Trivy is older than minimum trivy version required - please update Trivy to use this module	file_path="home/<USER>/.cache/trivy/policy/content/policies/cloud/policies/aws/cloudfront/enable_logging.rego" minimum_trivy_version="0.72.0"
+2026-10-15T13:42:11-05:00	INFO	[terraform scanner] Scanning root module	file_path="."
+2026-10-15T13:42:11-05:00	INFO	[terraform scanner] Scanning root module	file_path="bootstrap/state-backend"
+2026-10-15T13:42:11-05:00	INFO	[terraform executor] Ignore finding	rule="aws-lambda-enable-tracing" range="modules/ingest/main.tf:322-377"
+2026-10-15T13:42:11-05:00	INFO	[terraform executor] Ignore finding	rule="aws-s3-enable-logging" range="modules/storage/main.tf:122-136"
+2026-10-15T13:42:11-05:00	INFO	[terraform executor] Ignore finding	rule="aws-s3-enable-logging" range="bootstrap/state-backend/main.tf:51-57"
+2026-10-15T13:42:11-05:00	INFO	[terraform executor] Ignore finding	rule="aws-s3-encryption-customer-key" range="bootstrap/state-backend/main.tf:85-93"
+2026-10-15T13:42:11-05:00	INFO	Detected config files	num=5
+
+Report Summary
+
+┌─────────────────────────────────┬───────────┬───────────────────┐
+│             Target              │   Type    │ Misconfigurations │
+├─────────────────────────────────┼───────────┼───────────────────┤
+│ .                               │ terraform │         0         │
+├─────────────────────────────────┼───────────┼───────────────────┤
+│ bootstrap/state-backend         │ terraform │         0         │
+├─────────────────────────────────┼───────────┼───────────────────┤
+│ bootstrap/state-backend/main.tf │ terraform │         0         │
+├─────────────────────────────────┼───────────┼───────────────────┤
+│ modules/ingest/main.tf          │ terraform │         0         │
+├─────────────────────────────────┼───────────┼───────────────────┤
+│ modules/storage/main.tf         │ terraform │         0         │
+└─────────────────────────────────┴───────────┴───────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.0 of Trivy is now available, current version is 0.71.2
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+trivy config . --tf-vars demo.tfvars --severity HIGH,CRITICAL --exit-code 1
+2026-10-15T13:42:12-05:00	INFO	Loaded	file_path="trivy.yaml"
+2026-10-15T13:42:12-05:00	INFO	[misconfig] Misconfiguration scanning is enabled
+2026-10-15T13:42:12-05:00	INFO	[checks-client] Using existing checks from cache	path="~/.cache/trivy/policy/content"
+2026-10-15T13:42:13-05:00	WARN	[rego] Module will be skipped as current version of Trivy is older than minimum trivy version required - please update Trivy to use this module	file_path="home/<USER>/.cache/trivy/policy/content/policies/cloud/policies/aws/cloudfront/enable_logging.rego" minimum_trivy_version="0.72.0"
+2026-10-15T13:42:14-05:00	INFO	[terraform scanner] Scanning root module	file_path="."
+2026-10-15T13:42:14-05:00	INFO	[terraform scanner] Scanning root module	file_path="bootstrap/state-backend"
+2026-10-15T13:42:14-05:00	INFO	[terraform executor] Ignore finding	rule="aws-lambda-enable-tracing" range="modules/ingest/main.tf:322-377"
+2026-10-15T13:42:14-05:00	INFO	[terraform executor] Ignore finding	rule="aws-s3-enable-logging" range="modules/storage/main.tf:122-136"
+2026-10-15T13:42:14-05:00	INFO	[terraform executor] Ignore finding	rule="aws-s3-encryption-customer-key" range="bootstrap/state-backend/main.tf:85-93"
+2026-10-15T13:42:14-05:00	INFO	[terraform executor] Ignore finding	rule="aws-s3-enable-logging" range="bootstrap/state-backend/main.tf:51-57"
+2026-10-15T13:42:14-05:00	INFO	Detected config files	num=5
+
+Report Summary
+
+┌─────────────────────────────────┬───────────┬───────────────────┐
+│             Target              │   Type    │ Misconfigurations │
+├─────────────────────────────────┼───────────┼───────────────────┤
+│ .                               │ terraform │         0         │
+├─────────────────────────────────┼───────────┼───────────────────┤
+│ bootstrap/state-backend         │ terraform │         0         │
+├─────────────────────────────────┼───────────┼───────────────────┤
+│ bootstrap/state-backend/main.tf │ terraform │         0         │
+├─────────────────────────────────┼───────────┼───────────────────┤
+│ modules/ingest/main.tf          │ terraform │         0         │
+├─────────────────────────────────┼───────────┼───────────────────┤
+│ modules/storage/main.tf         │ terraform │         0         │
+└─────────────────────────────────┴───────────┴───────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.0 of Trivy is now available, current version is 0.71.2
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+gitleaks detect --no-git --redact
+
+    ○
+    │╲
+    │ ○
+    ○ ░
+    ░    gitleaks
+
+[90m1:42PM[0m [32mINF[0m [1mscanned ~935537 bytes (935.54 KB) in 341ms[0m
+[90m1:42PM[0m [32mINF[0m [1mno leaks found[0m
+.venv/bin/ruff check src tests scripts
+All checks passed!
+.venv/bin/ruff format --check src tests scripts
+28 files already formatted
+.venv/bin/mypy
+Success: no issues found in 10 source files
+.venv/bin/pytest
+........................................................................ [ 75%]
+.......................                                                  [100%]
+95 passed in 4.04s
+
+# Coverage — measured 2026-10-19T17:05:12Z on the evidenced commit 981aae6 (make check runs pytest without coverage)
+........................................................................ [ 75%]
+.......................                                                  [100%]
+================================ tests coverage ================================
+_______________ coverage: platform linux, python 3.12.13-final-0 _______________
+
+Name                                      Stmts   Miss Branch BrPart  Cover   Missing
+-------------------------------------------------------------------------------------
+src/ingest_lambda/alerts.py                  28      0      2      0   100%
+src/ingest_lambda/cold_store.py              12      0      0      0   100%
+src/ingest_lambda/config.py                  36      0      2      0   100%
+src/ingest_lambda/contract.py               106      1     34      1    99%   183
+src/ingest_lambda/handler.py                 79      0     10      1    99%   129->159
+src/ingest_lambda/metrics.py                  8      0      2      0   100%
+src/ingest_lambda/persistence.py             26      0      6      0   100%
+src/ingest_lambda/risk.py                    22      0      4      0   100%
+src/ingest_lambda/structured_logging.py      30      0     12      0   100%
+-------------------------------------------------------------------------------------
+TOTAL                                       347      1     72      2    99%
+Required test coverage of 90.0% reached. Total coverage: 99.28%

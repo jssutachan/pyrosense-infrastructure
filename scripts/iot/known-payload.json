@@ -1,0 +1,1 @@
+{"schema_version":"1.0","device_id":"PYRO-T1-0001","gateway_id":"GW-01","ts_device":"2026-09-24T10:00:00+00:00","seq":1,"lat":4.6,"lon":-74.05,"elevation_m":2900.0,"temp_c":18.5,"rh_pct":60.0,"smoke_ppm":0.0,"wind_speed_ms":2.5,"wind_dir_deg":180.0,"battery_pct":95.0,"status":"OK"}

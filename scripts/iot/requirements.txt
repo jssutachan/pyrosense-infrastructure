@@ -1,0 +1,6 @@
+# Test tooling for modules/iot only. Never shipped in the Lambda zip
+# (ADR-0007) and kept apart from requirements-dev.txt on purpose: the AWS IoT
+# Device SDK pulls a native CRT build that the Python quality gate does not need.
+# Pinned exactly: 1.31.0 pins awscrt==0.36.1, the version whose API the script
+# was checked against.
+awsiotsdk==1.31.0

@@ -31,8 +31,23 @@ environment = "demo"
 # to trip the 80% ACTUAL threshold. That is the guardrail working, not a bug.
 budget_limit_usd = 2
 
-# Budget notification recipients. Real address: PII, hence gitignored.
-ops_emails = ["you@example.com"]
+# --- Notification recipients (modules/budgets + modules/alerting, ADR-0014) ---
+
+# Maps of { label = email }. The label is what shows up in plans and resource
+# addresses; the address never does. The real file carries a real mailbox: PII,
+# hence gitignored.
+#
+# In demo both maps point at the same mailbox — one person is both the operator
+# and the responder. They are still two separate subscriptions on two separate
+# topics, and each one needs its own confirmation email. In production these
+# are different institutions (see prod.tfvars.example).
+ops_recipients = {
+  "operator" = "you@example.org"
+}
+
+fire_alert_recipients = {
+  "duty-desk" = "you@example.org"
+}
 
 # --- Encryption (modules/security, ADR-0010) ----------------------------------
 
@@ -40,3 +55,23 @@ ops_emails = ["you@example.com"]
 # cycle, and a key pending deletion incurs no charge, so the shortest window
 # keeps teardown clean. Production uses 30 — see prod.tfvars.
 kms_deletion_window_days = 7
+
+
+# --- Data lifecycle (modules/storage, ADR-0013) -------------------------------
+
+# The demo cycle is apply -> evidence -> destroy. true turns DynamoDB deletion
+# protection off and S3 force_destroy on, so destroy can remove a table and a
+# bucket that still hold data (including noncurrent object versions).
+# force_destroy only acts once it is in state: it must be applied before the
+# destroy that relies on it — which is always the case here, since it is set
+# from the first apply.
+allow_data_destruction = true
+
+# --- Device identity (modules/iot, ADR-0017) ----------------------------------
+
+# The fleet client's CSR on this machine. Only the CSR is read: the private key
+# generated with it stays in the same owner-only directory, outside both
+# repositories. Each environment has its own key pair, hence its own path.
+# Create both files with the runbook in modules/iot/README.md before the first
+# plan; destroy needs the CSR too, so keep it until the cycle is over.
+iot_fleet_client_csr_path = "~/.config/pyrosense/certs/demo/fleet-client.csr"
