@@ -3,6 +3,7 @@
 - **Commit:** 981aae6 · **Region:** us-east-1 · **Environment:** demo (ephemeral; created, tested and destroyed in one session)
 - **Deploy from nothing:** 50 resources in 105 s · **Quality gate:** 95 tests passed, coverage 99%, Trivy/TFLint/gitleaks clean
 - **Messages processed:** 15110 stored · **Lost:** 0 (see raw/ledger.txt)
+- **Cost of this run:** ≈ USD 0.004
 
 
 ## Results
