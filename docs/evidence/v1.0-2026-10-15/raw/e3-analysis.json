@@ -1,0 +1,18 @@
+{
+  "alerts_matched": 5,
+  "per_alert": [
+    "PYRO-T1-0001 seq=1792095473 2.81 s",
+    "PYRO-T2-0002 seq=1792095473 2.21 s",
+    "PYRO-T3-0003 seq=1792095473 1.18 s",
+    "PYRO-T1-0004 seq=1792095473 0.71 s",
+    "PYRO-T2-0005 seq=1792095473 0.30 s"
+  ],
+  "reading_to_alert_published_s": {
+    "n": 5,
+    "min": 0.3,
+    "p50": 1.18,
+    "p95": 2.69,
+    "p99": 2.79,
+    "max": 2.81
+  }
+}

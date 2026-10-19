@@ -1,0 +1,57 @@
+1792098222.6092123985 connecting as client_id=pyrosense-demo-fleet-client ...
+1792098224.1628394127 connected
+1792098224.1629102230
+1792098224.3685660362   OK   pyrosense/demo/telemetry/PYRO-T1-0001 seq=1792098224 packet_id=1 puback=205 ms
+1792098224.5727324486   OK   pyrosense/demo/telemetry/PYRO-T2-0002 seq=1792098224 packet_id=2 puback=204 ms
+1792098224.6824767590   OK   pyrosense/demo/telemetry/PYRO-T3-0003 seq=1792098224 packet_id=3 puback=109 ms
+1792098224.9821875095   OK   pyrosense/demo/telemetry/PYRO-T1-0004 seq=1792098224 packet_id=4 puback=300 ms
+1792098225.1880359650   OK   pyrosense/demo/telemetry/PYRO-T2-0005 seq=1792098224 packet_id=5 puback=206 ms
+1792098225.3921463490   OK   pyrosense/demo/telemetry/PYRO-T3-0006 seq=1792098224 packet_id=6 puback=204 ms
+1792098225.5797264576   OK   pyrosense/demo/telemetry/PYRO-T1-0007 seq=1792098224 packet_id=7 puback=187 ms
+1792098225.8016622066   OK   pyrosense/demo/telemetry/PYRO-T2-0008 seq=1792098224 packet_id=8 puback=222 ms
+1792098226.0091722012   OK   pyrosense/demo/telemetry/PYRO-T3-0009 seq=1792098224 packet_id=9 puback=207 ms
+1792098226.2113745213   OK   pyrosense/demo/telemetry/PYRO-T1-0010 seq=1792098224 packet_id=10 puback=202 ms
+1792098226.4160306454   OK   pyrosense/demo/telemetry/PYRO-T2-0011 seq=1792098224 packet_id=11 puback=205 ms
+1792098226.6206457615   OK   pyrosense/demo/telemetry/PYRO-T3-0012 seq=1792098224 packet_id=12 puback=204 ms
+1792098226.8257958889   OK   pyrosense/demo/telemetry/PYRO-T1-0013 seq=1792098224 packet_id=13 puback=205 ms
+1792098227.0305011272   OK   pyrosense/demo/telemetry/PYRO-T2-0014 seq=1792098224 packet_id=14 puback=205 ms
+1792098227.2354323864   OK   pyrosense/demo/telemetry/PYRO-T3-0015 seq=1792098224 packet_id=15 puback=205 ms
+1792098227.4402232170   OK   pyrosense/demo/telemetry/PYRO-T1-0016 seq=1792098224 packet_id=16 puback=205 ms
+1792098227.5956106186   OK   pyrosense/demo/telemetry/PYRO-T2-0017 seq=1792098224 packet_id=17 puback=155 ms
+1792098227.8496389389   OK   pyrosense/demo/telemetry/PYRO-T3-0018 seq=1792098224 packet_id=18 puback=254 ms
+1792098228.0543799400   OK   pyrosense/demo/telemetry/PYRO-T1-0019 seq=1792098224 packet_id=19 puback=205 ms
+1792098228.2592225075   OK   pyrosense/demo/telemetry/PYRO-T2-0020 seq=1792098224 packet_id=20 puback=205 ms
+1792098228.4249219894   OK   pyrosense/demo/telemetry/PYRO-T3-0021 seq=1792098224 packet_id=21 puback=166 ms
+1792098228.6115021706   OK   pyrosense/demo/telemetry/PYRO-T1-0022 seq=1792098224 packet_id=22 puback=186 ms
+1792098228.8581526279   OK   pyrosense/demo/telemetry/PYRO-T2-0023 seq=1792098224 packet_id=23 puback=247 ms
+1792098229.0789282322   OK   pyrosense/demo/telemetry/PYRO-T3-0024 seq=1792098224 packet_id=24 puback=221 ms
+1792098229.2987895012   OK   pyrosense/demo/telemetry/PYRO-T1-0025 seq=1792098224 packet_id=25 puback=220 ms
+1792098229.4356641769   OK   pyrosense/demo/telemetry/PYRO-T2-0026 seq=1792098224 packet_id=26 puback=137 ms
+1792098229.6180274487   OK   pyrosense/demo/telemetry/PYRO-T3-0027 seq=1792098224 packet_id=27 puback=182 ms
+1792098229.7336189747   OK   pyrosense/demo/telemetry/PYRO-T1-0028 seq=1792098224 packet_id=28 puback=115 ms
+1792098229.8459644318   OK   pyrosense/demo/telemetry/PYRO-T2-0029 seq=1792098224 packet_id=29 puback=112 ms
+1792098229.9552645683   OK   pyrosense/demo/telemetry/PYRO-T3-0030 seq=1792098224 packet_id=30 puback=109 ms
+1792098230.0621154308   OK   pyrosense/demo/telemetry/PYRO-T1-0031 seq=1792098224 packet_id=31 puback=107 ms
+1792098230.1810948849   OK   pyrosense/demo/telemetry/PYRO-T2-0032 seq=1792098224 packet_id=32 puback=119 ms
+1792098230.2896027565   OK   pyrosense/demo/telemetry/PYRO-T3-0033 seq=1792098224 packet_id=33 puback=108 ms
+1792098230.4034006596   OK   pyrosense/demo/telemetry/PYRO-T1-0034 seq=1792098224 packet_id=34 puback=113 ms
+1792098230.5241744518   OK   pyrosense/demo/telemetry/PYRO-T2-0035 seq=1792098224 packet_id=35 puback=121 ms
+1792098230.6339590549   OK   pyrosense/demo/telemetry/PYRO-T3-0036 seq=1792098224 packet_id=36 puback=110 ms
+1792098230.7542738914   OK   pyrosense/demo/telemetry/PYRO-T1-0037 seq=1792098224 packet_id=37 puback=120 ms
+1792098230.8597822189   OK   pyrosense/demo/telemetry/PYRO-T2-0038 seq=1792098224 packet_id=38 puback=105 ms
+1792098230.9911286831   OK   pyrosense/demo/telemetry/PYRO-T3-0039 seq=1792098224 packet_id=39 puback=131 ms
+1792098231.0949275494   OK   pyrosense/demo/telemetry/PYRO-T1-0040 seq=1792098224 packet_id=40 puback=104 ms
+1792098231.1959507465   OK   pyrosense/demo/telemetry/PYRO-T2-0041 seq=1792098224 packet_id=41 puback=101 ms
+1792098231.3052470684   OK   pyrosense/demo/telemetry/PYRO-T3-0042 seq=1792098224 packet_id=42 puback=109 ms
+1792098231.4070889950   OK   pyrosense/demo/telemetry/PYRO-T1-0043 seq=1792098224 packet_id=43 puback=102 ms
+1792098231.5170207024   OK   pyrosense/demo/telemetry/PYRO-T2-0044 seq=1792098224 packet_id=44 puback=110 ms
+1792098231.6320838928   OK   pyrosense/demo/telemetry/PYRO-T3-0045 seq=1792098224 packet_id=45 puback=115 ms
+1792098231.7409479618   OK   pyrosense/demo/telemetry/PYRO-T1-0046 seq=1792098224 packet_id=46 puback=109 ms
+1792098231.8463540077   OK   pyrosense/demo/telemetry/PYRO-T2-0047 seq=1792098224 packet_id=47 puback=105 ms
+1792098231.9500479698   OK   pyrosense/demo/telemetry/PYRO-T3-0048 seq=1792098224 packet_id=48 puback=104 ms
+1792098232.1632051468   OK   pyrosense/demo/telemetry/PYRO-T1-0049 seq=1792098224 packet_id=49 puback=213 ms
+1792098232.3824787140   OK   pyrosense/demo/telemetry/PYRO-T2-0050 seq=1792098224 packet_id=50 puback=219 ms
+1792098232.3825571537
+1792098232.3826346397 summary: sent=50 failed=0
+1792098232.3827941418 puback latency: avg=164 ms max=300 ms -> serial ceiling ~6.1 msg/s
+1792098232.3828537464 disconnected

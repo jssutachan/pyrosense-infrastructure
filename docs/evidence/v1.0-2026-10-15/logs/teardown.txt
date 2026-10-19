@@ -1,0 +1,6 @@
+state after destroy:
+module.budgets.aws_budgets_budget.monthly_cost
+alarms left: 0
+dashboards left: 0
+log groups left: 0 + 0
+key state: PendingDeletion

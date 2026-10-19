@@ -1,0 +1,13 @@
+1792090939.8214998245 connecting as client_id=pyrosense-demo-fleet-client ...
+1792090940.5086617470 connected
+1792090940.5087375641
+1792090940.6196343899   OK   pyrosense/demo/telemetry/PYRO-T1-0001 seq=1792090940 packet_id=1 puback=111 ms
+1792090941.2341935635   OK   pyrosense/demo/telemetry/PYRO-T2-0002 seq=1792090940 packet_id=2 puback=114 ms
+1792090941.8424050808   OK   pyrosense/demo/telemetry/PYRO-T3-0003 seq=1792090940 packet_id=3 puback=108 ms
+1792090942.4778227806   OK   pyrosense/demo/telemetry/PYRO-T1-0001 seq=1792090941 packet_id=4 puback=135 ms
+1792090943.0965874195   OK   pyrosense/demo/telemetry/PYRO-T2-0002 seq=1792090941 packet_id=5 puback=119 ms
+1792090943.7610256672   OK   pyrosense/demo/telemetry/PYRO-T3-0003 seq=1792090941 packet_id=6 puback=164 ms
+1792090944.2612242699
+1792090944.2613196373 summary: sent=6 failed=0
+1792090944.2614517212 puback latency: avg=125 ms max=164 ms -> serial ceiling ~8.0 msg/s
+1792090944.2616910934 disconnected

@@ -1,0 +1,23 @@
+## E5.1 Publish to another environment's topic with the demo certificate (must be denied)
+  ! connection interrupted: AwsCrtError: AWS_ERROR_MQTT_UNEXPECTED_HANGUP: The connection was closed unexpectedly.  FAIL pyrosense/prod/telemetry/PYRO-T1-0001 seq=1792099815: AwsCrtError: AWS_ERROR_MQTT_CANCELLED_FOR_CLEAN_SESSION: Old requests from the previous session are cancelled, and offline request will not be accept.
+summary: sent=0 failed=1
+## E5.2 Connect with a client ID that is not the Thing name (must be refused)
+CONNECT FAILED: AwsCrtError: AWS_ERROR_MQTT_UNEXPECTED_HANGUP: The connection was closed unexpectedly.
+## E5.3 Send to the queue over plain HTTP (must be denied by the TLS-only queue policy)
+
+aws: [ERROR]: An error occurred (AccessDenied) when calling the SendMessage operation: User: arn:aws:iam::<ACCOUNT_ID>:user/<IAM_PRINCIPAL> is not authorized to perform: sqs:sendmessage on resource: arn:aws:sqs:us-east-1:<ACCOUNT_ID>:pyrosense-demo-ingest with an explicit deny in a resource-based policy
+ENCRYPTED  SQS ingest queue
+ENCRYPTED  SQS dead-letter
+ENCRYPTED  S3 cold archive
+ENCRYPTED  DynamoDB hot table
+ENCRYPTED  SNS fire alerts
+ENCRYPTED  SNS ops alarms
+ENCRYPTED  Lambda log group
+ENCRYPTED  IoT rule error log
+ENCRYPTED  Lambda env vars
+KMS key rotation enabled: True
+statements: 9
+wildcard actions or resources: 0
+Access Analyzer findings (ERROR / SECURITY_WARNING):
+(end of findings)
+private keys in Terraform state: 0

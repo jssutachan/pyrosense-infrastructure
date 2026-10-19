@@ -1,0 +1,10 @@
+alert-publish-failures         2
+dlq-not-empty                  2
+fire-alert-delivery-failures   2
+iot-publish-auth-errors        1
+iot-rule-sqs-failures          2
+lambda-errors                  2
+lambda-throttles               2
+queue-oldest-message-age       3
+telemetry-silence              4
+transient-failures             2
