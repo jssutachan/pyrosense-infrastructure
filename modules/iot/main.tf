@@ -198,6 +198,10 @@ data "aws_iam_policy_document" "rule_trust" {
   }
 }
 
+# Both rule roles carry the workload permissions boundary (ADR-0023): the
+# ceiling the pipeline enforces on every role it creates. It does not change
+# what they do; their own policies below stay the exact grant.
+#
 # Forwarding role: exactly the producer contract published by
 # modules/messaging. KMS permissions sit in this identity policy and reach
 # the key through EnableIAMDelegation; no key policy change (debt #12 is
@@ -224,8 +228,9 @@ data "aws_iam_policy_document" "forward" {
 }
 
 resource "aws_iam_role" "forward" {
-  name               = "${var.name_prefix}-iot-rule-forward"
-  assume_role_policy = data.aws_iam_policy_document.rule_trust.json
+  name                 = "${var.name_prefix}-iot-rule-forward"
+  assume_role_policy   = data.aws_iam_policy_document.rule_trust.json
+  permissions_boundary = var.permissions_boundary_arn
 }
 
 resource "aws_iam_role_policy" "forward" {
@@ -257,8 +262,9 @@ data "aws_iam_policy_document" "errors" {
 }
 
 resource "aws_iam_role" "errors" {
-  name               = "${var.name_prefix}-iot-rule-errors"
-  assume_role_policy = data.aws_iam_policy_document.rule_trust.json
+  name                 = "${var.name_prefix}-iot-rule-errors"
+  assume_role_policy   = data.aws_iam_policy_document.rule_trust.json
+  permissions_boundary = var.permissions_boundary_arn
 }
 
 resource "aws_iam_role_policy" "errors" {

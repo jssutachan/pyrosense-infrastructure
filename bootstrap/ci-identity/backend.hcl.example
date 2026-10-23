@@ -1,0 +1,14 @@
+# Template for bootstrap/ci-identity/backend.hcl, which is never committed.
+#
+#   cp bootstrap/ci-identity/backend.hcl.example bootstrap/ci-identity/backend.hcl
+#   # replace <ACCOUNT_ID> with your AWS account ID
+#   terraform -chdir=bootstrap/ci-identity init -backend-config=backend.hcl
+#
+# Same bucket as the main configuration, different key: neither pipeline role
+# can read or write this one.
+
+bucket       = "pyrosense-tfstate-<ACCOUNT_ID>"
+key          = "bootstrap/ci-identity/terraform.tfstate"
+region       = "us-east-1"
+encrypt      = true
+use_lockfile = true

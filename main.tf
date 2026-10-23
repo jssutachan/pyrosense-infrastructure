@@ -2,6 +2,8 @@
 # Root module — composition root.
 #
 # Wires infrastructure modules together; declares no resources of its own.
+# Its one data source reads the workload permissions boundary created by
+# bootstrap/ci-identity (ADR-0023).
 # Provider, versions and backend live in providers.tf / versions.tf.
 #
 # Module order below follows the dependency chain: security produces the key
@@ -60,6 +62,19 @@ locals {
   # and 1440 (validated in the module).
   observability_telemetry_silence_minutes = 10
 
+}
+
+# ------------------------------------------------------------------------------
+# Pipeline identity contract (ADR-0023)
+# ------------------------------------------------------------------------------
+
+# Every IAM role a module creates carries this boundary: the pipeline's apply
+# role may only create roles that do, and the boundary caps what they can
+# ever do. It is created by bootstrap/ci-identity and read here by name, so a
+# missing bootstrap stack fails the plan on this lookup, before anything is
+# created.
+data "aws_iam_policy" "workload_boundary" {
+  name = "${var.resource_prefix}-workload-boundary"
 }
 
 # ------------------------------------------------------------------------------
@@ -195,6 +210,8 @@ module "iot" {
   queue_url   = module.messaging.queue_url
   kms_key_arn = module.security.kms_key_arn
 
+  permissions_boundary_arn = data.aws_iam_policy.workload_boundary.arn
+
   fleet_client_csr_pem = file(pathexpand(var.iot_fleet_client_csr_path))
 }
 
@@ -222,6 +239,8 @@ module "ingest" {
   source_dir  = "${path.module}/src/ingest_lambda"
 
   kms_key_arn = module.security.kms_key_arn
+
+  permissions_boundary_arn = data.aws_iam_policy.workload_boundary.arn
 
   queue_arn                       = module.messaging.queue_arn
   queue_message_retention_seconds = module.messaging.message_retention_seconds

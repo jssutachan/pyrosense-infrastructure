@@ -17,7 +17,7 @@ TFVARS         ?= demo.tfvars
 BACKEND_CONFIG := config/backend.hcl
 
 # Additional Terraform roots validated alongside the main one.
-BOOTSTRAP_ROOTS := bootstrap/state-backend
+BOOTSTRAP_ROOTS := bootstrap/state-backend bootstrap/ci-identity
 
 # Python tools come from the project virtualenv when it exists (local runs,
 # no need to activate it first) and from PATH otherwise (CI installs them into
