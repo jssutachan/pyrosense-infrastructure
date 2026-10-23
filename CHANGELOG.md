@@ -393,6 +393,11 @@ queue", wording already corrected inside the module; it now states the
   `gitleaks detect --no-git` scanned only the files on disk.
 - `.pre-commit-config.yaml` stated that "the same checks run in CI"; CI ran
   only the Python half. The statement is now true.
+- The CI secret scan reported only the number of leaks. `make secrets` now runs
+  `scripts/tooling/gitleaks-gate.sh`, which prints rule, file, line and commit
+  for each finding from a JSON report, without the secret (redacted) or the
+  commit author's name and email, which `--verbose` would publish in a public
+  log. (ADR-0022)
 
 ### Security
 

@@ -113,7 +113,7 @@ sec-config: ## Scan Terraform for misconfigurations (Trivy)
 # added in one commit and deleted in the next is still published in a public
 # repository's history. CI checks out the full history for this target.
 secrets: ## Scan the git history for hardcoded secrets (gitleaks)
-	gitleaks git --redact .
+	scripts/tooling/gitleaks-gate.sh
 
 guard: ## Fail on tracked plans, state, tfvars or keys, and on real values in templates
 	@scripts/tooling/guard.sh
