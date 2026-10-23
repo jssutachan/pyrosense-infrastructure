@@ -1,0 +1,3 @@
+remote: error: GH013: Repository rule violations found for refs/heads/develop.
+remote: Review all repository rules at https://github.com/<OWNER>/pyrosense-infrastructure/rules?ref=refs%2Fheads%2Fdevelop
+ ! [remote rejected] HEAD -> develop (push declined due to repository rule violations)

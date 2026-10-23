@@ -1,0 +1,11 @@
+repository: <OWNER>/pyrosense-infrastructure
+c1_merge_commit: 00eea43 2026-10-23
+fix_merge_commit: 7ad41d6 2026-10-23
+runner: ubuntu-24.04 (GitHub-hosted, standard)
+toolchain (.tool-versions):
+  python 3.12.13
+  terraform 1.15.8
+  tflint 0.64.0
+  trivy 0.75.0
+  gitleaks 8.30.1
+  actionlint 1.7.12

@@ -1,6 +1,6 @@
 # ADR-0022: CI quality gate and pinned toolchain
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-10-23, after the C1 run: 15 of 15 provoked failures blocked; see docs/evidence/ci-c1-2026-10-23/)
 - **Date:** 2026-10-21
 - **Stage:** CI/CD, sub-stage C1 (static CI)
 

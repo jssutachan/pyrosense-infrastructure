@@ -1,0 +1,11 @@
+# Provocation: py-ruff
+
+## Checks (gh pr checks)
+python	fail	36s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39915840022/job/120290152212
+hygiene	pass	7s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39915840022/job/120290152178
+security	pass	8s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39915840022/job/120290151921
+terraform	pass	37s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39915840022/job/120290152244
+merge state: BLOCKED
+
+## Expected message in the failed job log (pattern: F401)
+F401 [*] `os` imported but unused

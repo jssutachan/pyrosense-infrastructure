@@ -1,0 +1,11 @@
+# Provocation: guard-name
+
+## Checks (gh pr checks)
+hygiene	fail	5s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39917966766/job/120295997445
+python	pass	53s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39917966766/job/120295997460
+security	pass	9s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39917966766/job/120295997240
+terraform	pass	33s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39917966766/job/120295997520
+merge state: BLOCKED
+
+## Expected message in the failed job log (pattern: zz-provocation\.tfvars)
+  zz-provocation.tfvars

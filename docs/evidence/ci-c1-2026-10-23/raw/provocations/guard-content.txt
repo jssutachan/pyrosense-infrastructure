@@ -1,0 +1,12 @@
+# Provocation: guard-content
+
+## Checks (gh pr checks)
+hygiene	fail	6s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39918136178/job/120296551423
+python	pass	44s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39918136178/job/120296551205
+security	pass	7s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39918136178/job/120296551527
+terraform	pass	28s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39918136178/job/120296551606
+merge state: BLOCKED
+
+## Expected message in the failed job log (pattern: outside the example domains)
+guard: zz-provocation.tfvars.example:45 has an address outside the example domains (value not shown)
+guard: zz-provocation.tfvars.example:49 has an address outside the example domains (value not shown)

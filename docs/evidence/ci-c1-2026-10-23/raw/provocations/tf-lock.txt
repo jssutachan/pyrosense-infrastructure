@@ -1,0 +1,13 @@
+# Provocation: tf-lock
+
+## Checks (gh pr checks)
+terraform	fail	14s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39914682742/job/120285449209
+hygiene	pass	6s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39914682742/job/120285448760
+python	pass	51s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39914682742/job/120285449147
+security	pass	9s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39914682742/job/120285449167
+merge state: BLOCKED
+
+## Expected message in the failed job log (pattern: hashicorp/random)
+- Finding hashicorp/random versions matching "~> 3.6"...
+- Installing hashicorp/random v3.9.1...
+- Installed hashicorp/random v3.9.1 (signed by HashiCorp)
