@@ -116,6 +116,17 @@ affects this repository. Trivy is pinned at 0.75.0 (2026-10-01) rather than
   `git push` is rejected; merges go through a PR with "Create a merge commit".
 - The ADR that places the pipeline identity (originally announced as
   ADR-0022 in the CI/CD contract) becomes ADR-0023.
+- Limitation: actionlint cannot validate the inputs of actions pinned by a full
+  commit SHA, because its action metadata is indexed by tag. A misspelled
+  `with:` key passes the gate, and GitHub only warns at runtime ("Unexpected
+  input"). Inputs of pinned actions are reviewed by hand on every workflow
+  diff. Reproduced with actionlint 1.7.12 on 2026-10-23.
+- `gitleaks git` scans every branch present in the clone, and the `security`
+  job checks out all branches. A leak on any remote branch therefore fails the
+  `security` check of every pull request until that branch is deleted or
+  rewritten. Accepted: in a public repository, a secret on any branch is
+  already exposed, so stopping every merge until it is purged is the intended
+  response.
 
 ## Revisit if
 
@@ -127,3 +138,5 @@ affects this repository. Trivy is pinned at 0.75.0 (2026-10-01) rather than
   and the 14-day cooldown blocks a needed fix.
 - The repository becomes private (minutes, rulesets and environments change
   with the plan).
+- A linter in the gate can resolve SHA-pinned actions to their `action.yml`;
+  the input check is then restored.
