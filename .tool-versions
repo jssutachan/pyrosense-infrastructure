@@ -1,5 +1,4 @@
 python 3.12.13
-terraform 1.15.8
 tflint 0.64.0
 trivy 0.75.0
 gitleaks 8.30.1
