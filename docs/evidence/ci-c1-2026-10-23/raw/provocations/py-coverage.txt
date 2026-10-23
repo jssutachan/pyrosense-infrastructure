@@ -1,0 +1,11 @@
+# Provocation: py-coverage
+
+## Checks (gh pr checks)
+python	fail	53s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39917787367/job/120295419701
+hygiene	pass	5s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39917787367/job/120295419522
+security	pass	8s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39917787367/job/120295419072
+terraform	pass	38s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39917787367/job/120295419564
+merge state: BLOCKED
+
+## Expected message in the failed job log (pattern: Required test coverage of 100)
+FAIL Required test coverage of 100.0% not reached. Total coverage: 99.28%

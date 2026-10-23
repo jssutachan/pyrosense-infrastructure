@@ -1,0 +1,11 @@
+# Provocation: actionlint
+
+## Checks (gh pr checks)
+hygiene	fail	4s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39921089683/job/120306217749
+python	pass	40s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39921089683/job/120306218001
+security	pass	10s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39921089683/job/120306218041
+terraform	pass	32s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39921089683/job/120306218008
+merge state: BLOCKED
+
+## Expected message in the failed job log (pattern: property "pin" is not defined)
+.github/workflows/ci.yml:88:34: property "pin" is not defined in object type {pins: {conclusion: string; outcome: string; outputs: {string => string}}} [expression]

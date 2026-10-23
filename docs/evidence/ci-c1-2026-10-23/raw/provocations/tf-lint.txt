@@ -1,0 +1,12 @@
+# Provocation: tf-lint
+
+## Checks (gh pr checks)
+terraform	fail	27s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39914513458/job/120284906718
+hygiene	pass	7s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39914513458/job/120284906690
+python	pass	50s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39914513458/job/120284906421
+security	pass	10s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39914513458/job/120284906719
+merge state: BLOCKED
+
+## Expected message in the failed job log (pattern: terraform_documented_variables)
+Notice: `zz_lint` variable has no description (terraform_documented_variables)
+Reference: https://github.com/terraform-linters/tflint-ruleset-terraform/blob/v0.15.0/docs/rules/terraform_documented_variables.md

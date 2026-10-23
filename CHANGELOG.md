@@ -266,6 +266,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs/github/ruleset-protected-branches.json`: the four checks required,
   pull request required, no force push, no deletion, empty bypass list.
 - ADR-0022 — CI quality gate and pinned, hash-verified toolchain.
+- `docs/ci-cd.md`: how the CI/CD pipeline is designed and why, how each gate
+  was proven, what testing it found, and what it does not cover yet. Grows with
+  each CI/CD stage.
+- `docs/evidence/ci-c1-2026-10-23/`: evidence of the CI quality gate: the first
+  green run, the ruleset, a rejected direct push, a public-log scan with no
+  sensitive values, and 15 provoked failures, each blocked by the expected check.
 
 ### Changed
 
@@ -341,6 +347,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   updated for the CI gate.
 - `docs/production-readiness.md`: new "Delivery pipeline (CI/CD)" section and
   summary row.
+- ADR-0022 accepted after the C1 run.
+- Root `README.md`: CI/CD link, CI gate row in "Proof it works", "Proven, not
+  assumed" paragraph, test setup with `uv` and the pinned Python, `make py-test`.
+- `docs/evidence/README.md`: index of evidence sets (end-to-end run, CI gate).
 
 ### Fixed
 

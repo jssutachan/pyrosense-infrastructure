@@ -4,8 +4,8 @@
 
 **Status:** the v1.0 serverless core is complete. All eight infrastructure modules have been **deployed, tested end to end on real AWS and destroyed**: 15,110 messages processed, **0 lost**, with the evidence published in this repository. CI/CD is in progress: every pull request now runs the full static quality gate as required checks; the Terraform plan and deploy pipeline with OIDC comes next.
 
-| [▶ Test evidence](docs/evidence/README.md) | [Production readiness](docs/production-readiness.md) | [Design decisions](docs/adr/) |
-|---|---|---|
+| [▶ Test evidence](docs/evidence/README.md) | [CI/CD](docs/ci-cd.md) | [Production readiness](docs/production-readiness.md) | [Design decisions](docs/adr/) |
+|---|---|---|---|
 
 ---
 
@@ -39,6 +39,7 @@ The complete system was deployed from nothing and tested for several hours on AW
 | Security probes: other environment, impersonated device, unencrypted HTTP | 3 of 3 denied · 9 of 9 data stores encrypted with a customer-managed key |
 | Monitoring | 10 of 10 alarms delivered their notification · a leftover from a test was caught by the drift check and fixed |
 | Code quality | 95 tests · Terraform validate, TFLint, Trivy and gitleaks clean on the tested commit |
+| CI quality gate | 15 of 15 deliberately broken pull requests blocked from merging, each by the expected check · 0 sensitive values in the public logs ([evidence](docs/evidence/ci-c1-2026-10-23/README.md)) |
 
 ![Every boundary of the pipeline agrees during the 502-sensor run](docs/evidence/v1.0-2026-10-15/charts/01-edge-to-storage.png)
 
@@ -137,6 +138,8 @@ A repository ruleset makes the four checks required on `develop` and `main`, req
 
 **Pinned toolchain.** Versions live in `.tool-versions` (binaries and Python) and `requirements-dev.txt` (Python packages). CI installs each binary only after checking it against a SHA-256 committed in `scripts/tooling/checksums.txt`, and every third-party action is pinned to a full commit SHA. Trivy uses the checks embedded in the pinned binary, so the same commit always gets the same verdict. `make tools` compares your local toolchain with the pins (ADR-0022).
 
+**Proven, not assumed.** Every gate was tested by a pull request built to fail: 15 of 15 were blocked by the expected check, and testing the gate found and fixed problems in the gate itself. Why the pipeline is built this way, how each part was proven and what it does not cover yet: **[docs/ci-cd.md](docs/ci-cd.md)**.
+
 ---
 
 ## Repository structure
@@ -165,11 +168,12 @@ A repository ruleset makes the four checks required on `develop` and `main`, req
 ├── src/ingest_lambda/         # Lambda source (Python 3.12, stdlib only)
 ├── tests/                     # pytest suite (moto: no AWS account needed)
 ├── scripts/                   # operator helpers; scripts/iot has the MQTT test publisher
-│   └── tooling/               # hash-verified tool installer, version check, Trivy gate
+│   └── tooling/               # hash-verified tool installer, version check, Trivy and gitleaks gates, guard
 ├── docs/
 │   ├── adr/                   # Architecture Decision Records
-│   ├── evidence/              # end-to-end test evidence (start here)
+│   ├── evidence/              # test evidence: end-to-end run and CI gate (start here)
 │   ├── github/                # repository ruleset, kept as code
+│   ├── ci-cd.md               # how the pipeline is designed and how it was proven
 │   └── production-readiness.md
 └── .github/workflows/         # CI: four required checks
 ```
@@ -183,17 +187,20 @@ A repository ruleset makes the four checks required on `develop` and `main`, req
 - An AWS account with programmatic access.
 - AWS CLI ≥ 2.32.0 (`aws login` for temporary, auto-refreshing credentials; no long-lived access keys).
 - Terraform ≥ 1.11 (native S3 state locking with `use_lockfile = true`); the gate and CI use the exact version in `.tool-versions`.
-- **Python 3.12**, the Lambda runtime target; the test suite requires 3.12 or newer.
+- **Python 3.12**, the Lambda runtime target. The gate and CI use the exact patch in `.tool-versions`; [`uv`](https://docs.astral.sh/uv/) installs it without touching the system Python.
 - Quality gate tooling at the versions pinned in `.tool-versions`: `tflint`, `trivy`, `gitleaks` and `actionlint` (on Linux x86_64, `scripts/tooling/install-tool.sh <tool>` installs each one after verifying its checksum), plus `pre-commit`, and `jq` to inspect the plan before applying. `make tools` reports any version that differs from the pins.
 - `openssl`, to generate the device key pair and certificate request locally (see `modules/iot/README.md`).
 
 **Run the test suite** (no AWS account needed):
 
 ```bash
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
-pytest              # 95 tests
+uv python install 3.12.13                       # the version pinned in .tool-versions
+uv venv --seed --python 3.12.13 .venv
+.venv/bin/python -m pip install -r requirements-dev.txt
+make py-test                                    # 95 tests + the 90 % branch-coverage floor
 ```
+
+The full toolchain setup (linters, scanners, version check, hooks) is in [docs/ci-cd.md](docs/ci-cd.md#7-working-with-the-pipeline).
 
 > The suite runs entirely against an in-memory AWS (moto): no account, no credentials, no cost. See `tests/README.md`.
 
@@ -230,7 +237,7 @@ terraform apply tfplan
 | Area | Status |
 |---|---|
 | Lambda consumer (Python) | ✅ Complete · 95 tests |
-| CI quality gate (GitHub Actions) | ✅ Full static gate (Python, Terraform, security, hygiene) as required checks on every pull request |
+| CI quality gate (GitHub Actions) | ✅ Full static gate (Python, Terraform, security, hygiene) as required checks on every pull request · [proven](docs/evidence/ci-c1-2026-10-23/README.md) |
 | Remote state backend · cost guardrail | ✅ Deployed |
 | Encryption · messaging · storage · alerting · IoT · ingest · observability | ✅ Each verified in its own deploy/destroy cycle |
 | End-to-end evidence run (whole system on AWS) | ✅ [Published](docs/evidence/README.md) |

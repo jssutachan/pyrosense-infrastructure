@@ -1,0 +1,11 @@
+# Provocation: tf-fmt
+
+## Checks (gh pr checks)
+terraform	fail	9s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39913979319/job/120283194355
+hygiene	pass	5s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39913979319/job/120283194098
+python	pass	47s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39913979319/job/120283194366
+security	pass	7s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39913979319/job/120283194297
+merge state: BLOCKED
+
+## Expected message in the failed job log (pattern: main\.tf)
+main.tf

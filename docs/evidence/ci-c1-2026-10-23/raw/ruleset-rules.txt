@@ -1,0 +1,2 @@
+develop: deletion, non_fast_forward, pull_request, required_status_checks
+main: deletion, non_fast_forward, pull_request, required_status_checks

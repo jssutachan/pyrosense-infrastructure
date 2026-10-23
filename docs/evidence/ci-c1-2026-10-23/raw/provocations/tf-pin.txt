@@ -1,0 +1,12 @@
+# Provocation: tf-pin
+
+## Checks (gh pr checks)
+terraform	fail	3s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39914864218/job/120286035699
+hygiene	pass	6s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39914864218/job/120286035919
+python	pass	54s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39914864218/job/120286035977
+security	pass	9s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39914864218/job/120286036102
+merge state: BLOCKED
+
+## Expected message in the failed job log (pattern: must be pinned to an exact)
+^[[36;1m  echo "::error file=.tool-versions::terraform must be pinned to an exact X.Y.Z version (found: '${version}')"^[[0m
+##[error]terraform must be pinned to an exact X.Y.Z version (found: '')
