@@ -2,7 +2,7 @@
 
 > Serverless, event-driven AWS platform for **early wildfire detection** and **multi-stakeholder alerting**: sensors report, the cloud decides, the right people get alerted in seconds.
 
-**Status:** the v1.0 serverless core is complete. All eight infrastructure modules have been **deployed, tested end to end on real AWS and destroyed**: 15,110 messages processed, **0 lost**, with the evidence published in this repository. Next stage: CI/CD with GitHub Actions.
+**Status:** the v1.0 serverless core is complete. All eight infrastructure modules have been **deployed, tested end to end on real AWS and destroyed**: 15,110 messages processed, **0 lost**, with the evidence published in this repository. CI/CD is in progress: every pull request now runs the full static quality gate as required checks; the Terraform plan and deploy pipeline with OIDC comes next.
 
 | [▶ Test evidence](docs/evidence/README.md) | [Production readiness](docs/production-readiness.md) | [Design decisions](docs/adr/) |
 |---|---|---|
@@ -19,7 +19,7 @@ PyroSense explores how a cloud platform could close that gap: a network of senso
 
 - **Designed for production, deployed for demo.** The architecture is sized for a real fleet of about 500 sensors; the deployment is ephemeral and costs cents. Nothing in the design was simplified because the deployment is small.
 - **Grounded in a real problem.** The scenario, the stakeholders and the failure modes come from the actual 2024 event, which is why the limitations of this design are documented as carefully as its features ([production readiness](docs/production-readiness.md)).
-- **Every non-trivial decision is written down.** 21 Architecture Decision Records state the context, the decision, the alternatives rejected and when to revisit it.
+- **Every non-trivial decision is written down.** 22 Architecture Decision Records state the context, the decision, the alternatives rejected and when to revisit it.
 - **Nothing is claimed without evidence.** Each module was deployed, exercised against real AWS services, verified and destroyed before it was merged; the full system was then tested end to end, including injected failures.
 - **AI-assisted, human-owned.** AI tools drafted parts of the code. Every draft was reviewed against the official AWS and Terraform documentation before it was accepted, and the drafts that were wrong were rejected and the reasons recorded: a private key stored in Terraform state, a device policy that would have denied every real sensor, an alarm configuration that could never fire, among others.
 
@@ -117,8 +117,25 @@ The architecture is designed for a production fleet, but deployed ephemerally at
 | Security | AWS KMS customer-managed key with rotation · least-privilege IAM with KMS conditions · TLS enforced by policy |
 | Cost control | AWS Budgets guardrail · ephemeral deployments |
 | Infrastructure as Code | Terraform ≥ 1.11, 8 modules, remote S3 state with native locking |
-| Quality gate | terraform fmt/validate, TFLint, Trivy, gitleaks, ruff, mypy (strict), pytest + moto, pre-commit |
-| CI/CD | GitHub Actions: Python checks today; Terraform pipeline with OIDC next |
+| Quality gate | terraform fmt/validate, TFLint, Trivy, gitleaks, ruff, mypy (strict), pytest + moto (90 % branch-coverage floor), actionlint, pre-commit |
+| CI/CD | GitHub Actions: the full static gate as four required checks; Terraform plan and deploy with OIDC next |
+
+---
+
+## Continuous integration
+
+Every pull request and every push to `develop` and `main` runs four required checks. Each one calls the same `make` targets used locally, so the gate is defined once, in the `Makefile`.
+
+| Check | Runs | Fails on |
+|---|---|---|
+| `python` | `make py-lint py-type py-test` | ruff findings or formatting, mypy (strict), a failing test, branch coverage below 90 % |
+| `terraform` | `make fmt-check validate lint` | unformatted HCL, schema errors in any root, a provider missing from the committed lock file, TFLint findings |
+| `security` | `make sec` | Trivy HIGH/CRITICAL findings, a file Trivy could not parse, a secret anywhere in the git history |
+| `hygiene` | `make guard ci-lint` | a tracked plan, state, tfvars, backend config, CSR or key; a real email address or AWS account id in a committed `*.example` template; actionlint findings in the workflows |
+
+A repository ruleset makes the four checks required on `develop` and `main`, requires a pull request and allows no bypass. CI needs no cloud credentials.
+
+**Pinned toolchain.** Versions live in `.tool-versions` (binaries and Python) and `requirements-dev.txt` (Python packages). CI installs each binary only after checking it against a SHA-256 committed in `scripts/tooling/checksums.txt`, and every third-party action is pinned to a full commit SHA. Trivy uses the checks embedded in the pinned binary, so the same commit always gets the same verdict. `make tools` compares your local toolchain with the pins (ADR-0022).
 
 ---
 
@@ -128,7 +145,9 @@ The architecture is designed for a production fleet, but deployed ephemerally at
 .
 ├── README.md
 ├── Makefile                   # task shortcuts; `make check` runs the full static gate
+├── .tool-versions             # pinned toolchain: Python, Terraform, TFLint, Trivy, gitleaks, actionlint
 ├── pyproject.toml             # Python tooling (ruff, mypy, pytest, coverage)
+├── requirements-dev.txt       # Python dev dependencies, pinned exactly
 ├── trivy.yaml  .tflint.hcl    # scanner and lint configuration (shared by local runs and CI)
 ├── main.tf  variables.tf  outputs.tf  versions.tf  providers.tf   # root: composition only
 ├── demo.tfvars.example  prod.tfvars.example                       # per-environment inputs (real ones are gitignored)
@@ -146,11 +165,13 @@ The architecture is designed for a production fleet, but deployed ephemerally at
 ├── src/ingest_lambda/         # Lambda source (Python 3.12, stdlib only)
 ├── tests/                     # pytest suite (moto: no AWS account needed)
 ├── scripts/                   # operator helpers; scripts/iot has the MQTT test publisher
+│   └── tooling/               # hash-verified tool installer, version check, Trivy gate
 ├── docs/
 │   ├── adr/                   # Architecture Decision Records
 │   ├── evidence/              # end-to-end test evidence (start here)
+│   ├── github/                # repository ruleset, kept as code
 │   └── production-readiness.md
-└── .github/workflows/         # CI
+└── .github/workflows/         # CI: four required checks
 ```
 
 ---
@@ -161,9 +182,9 @@ The architecture is designed for a production fleet, but deployed ephemerally at
 
 - An AWS account with programmatic access.
 - AWS CLI ≥ 2.32.0 (`aws login` for temporary, auto-refreshing credentials; no long-lived access keys).
-- Terraform ≥ 1.11 (native S3 state locking with `use_lockfile = true`).
+- Terraform ≥ 1.11 (native S3 state locking with `use_lockfile = true`); the gate and CI use the exact version in `.tool-versions`.
 - **Python 3.12**, the Lambda runtime target; the test suite requires 3.12 or newer.
-- Quality gate tooling: `tflint`, `trivy`, `pre-commit`, and `jq` to inspect the plan before applying.
+- Quality gate tooling at the versions pinned in `.tool-versions`: `tflint`, `trivy`, `gitleaks` and `actionlint` (on Linux x86_64, `scripts/tooling/install-tool.sh <tool>` installs each one after verifying its checksum), plus `pre-commit`, and `jq` to inspect the plan before applying. `make tools` reports any version that differs from the pins.
 - `openssl`, to generate the device key pair and certificate request locally (see `modules/iot/README.md`).
 
 **Run the test suite** (no AWS account needed):
@@ -209,7 +230,7 @@ terraform apply tfplan
 | Area | Status |
 |---|---|
 | Lambda consumer (Python) | ✅ Complete · 95 tests |
-| CI quality gate (GitHub Actions) | ✅ Python lint, types and tests on every push |
+| CI quality gate (GitHub Actions) | ✅ Full static gate (Python, Terraform, security, hygiene) as required checks on every pull request |
 | Remote state backend · cost guardrail | ✅ Deployed |
 | Encryption · messaging · storage · alerting · IoT · ingest · observability | ✅ Each verified in its own deploy/destroy cycle |
 | End-to-end evidence run (whole system on AWS) | ✅ [Published](docs/evidence/README.md) |
@@ -247,6 +268,7 @@ Every significant decision is an ADR under [`docs/adr/`](docs/adr/).
 | 0019 | Ingest consumer: runtime, configuration contract, concurrency and IAM scoping |
 | 0020 | Detection policy: ownership and provisional values |
 | 0021 | Observability: one fault, one page; fleet silence as a breaching heartbeat |
+| 0022 | CI quality gate and pinned, hash-verified toolchain |
 
 ---
 

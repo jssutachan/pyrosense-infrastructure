@@ -6,7 +6,7 @@ It is written for two readers:
 - **A reviewer**, to show which limitations are known, why they exist, and what closing each one would take.
 - **Anyone who wants to build a real detection system on this infrastructure**, as a checklist of what to address first.
 
-The structure follows the questions a production readiness review asks (architecture, failure modes, capacity, security, operations), in the spirit of the [Google SRE launch checklist](https://sre.google/sre-book/reliable-product-launches/) and [AWS Operational Readiness Reviews](https://docs.aws.amazon.com/wellarchitected/latest/operational-readiness-reviews/wa-operational-readiness-reviews.html).
+The structure follows the questions a production readiness review asks (architecture, failure modes, capacity, security, operations, delivery), in the spirit of the [Google SRE launch checklist](https://sre.google/sre-book/reliable-product-launches/) and [AWS Operational Readiness Reviews](https://docs.aws.amazon.com/wellarchitected/latest/operational-readiness-reviews/wa-operational-readiness-reviews.html).
 
 **Priority**
 - 🔴 **Before any real use:** without it, the system could fail people who depend on it.
@@ -166,6 +166,46 @@ Already verified: least-privilege IAM (no wildcards; IAM Access Analyzer clean),
 
 ---
 
+## 9. Delivery pipeline (CI/CD)
+
+The quality gate runs on every pull request as required checks, with a pinned, hash-verified toolchain (ADR-0022). These are the parts a team deploying this for real would still have to add.
+
+### 🔴 One person writes, reviews and merges every change
+- **Today:** the project has a single maintainer. The ruleset requires a pull request and green checks, but zero approvals, because nobody can approve their own pull request.
+- **Why it is a problem:** the checks catch what they are written to catch. A wrong threshold, a weakened IAM condition or a removed alarm passes every check and reaches the main branch with nobody else having read it.
+- **What production needs:**
+  - At least two people with write access, and at least one required approval on the ruleset, with stale approvals dismissed on new pushes.
+  - Code owners for the sensitive paths (IAM, the key policy, the detection policy, the workflows).
+  - "Prevent self-review" on the deployment environments, so the person who triggers a deploy cannot also approve it.
+
+### 🟠 Only direct Python dependencies are locked
+- **Today:** `requirements-dev.txt` pins each direct dependency exactly; the packages they pull in are resolved at install time.
+- **What production needs:** a full lock with hashes (`uv lock` or `pip-compile --generate-hashes`), installed with `--require-hashes`, so CI and every developer install byte-identical packages.
+
+### 🟠 Pins do not update themselves
+- **Today:** actions, binaries and Python packages are pinned; a version bump is a manual, reviewed change.
+- **Why it is a problem:** pins without an update process age, and a known vulnerability stays in the toolchain until someone notices.
+- **What production needs:** an update bot (Dependabot or Renovate) covering actions, Python packages, pre-commit hooks and the binaries in `.tool-versions`, with a cooldown before new releases are adopted, and an owner who reviews its pull requests every week.
+
+### 🟠 Secrets need a response procedure, not only detection
+- **Today:** secrets are blocked at three points: the pre-commit hook, GitHub push protection and a CI scan of the full history.
+- **Why it is a problem:** in a public repository a secret is exposed the moment it is pushed, so detection after the push is already a leak.
+- **What production needs:** a written rotation procedure for every credential type, rehearsed, with an owner who can revoke a key within minutes.
+
+### 🟠 A private repository changes what is available
+- **Today:** the repository is public, which makes Actions minutes free on standard runners and makes rulesets, environments, required reviewers and environment secrets available on the free plan.
+- **What production needs:** a production repository is usually private. Check the GitHub plan before relying on these features, and budget for Actions minutes.
+
+### 🟢 Hashes prove integrity, not origin
+- **Today:** each binary must match a SHA-256 recorded in the repository when it was pinned.
+- **What production needs:** verify signatures or build attestations as well (cosign, `gh attestation verify`), which prove who built the artifact, not only that it has not changed since it was pinned.
+
+### 🟢 The provider lock covers one platform
+- **Today:** `.terraform.lock.hcl` was generated on Linux, which matches the CI runners.
+- **What production needs:** a team on macOS and Linux records provider hashes for every platform (`terraform providers lock -platform=...`), or `terraform init` fails on one of them.
+
+---
+
 ## Summary
 
 | Area | 🔴 Before real use | 🟠 Before scale |
@@ -178,3 +218,4 @@ Already verified: least-privilege IAM (no wildcards; IAM Access Analyzer clean),
 | Security | — | DynamoDB TLS policy · scoped key use for the IoT role · state encrypted with the managed key · account guardrails |
 | Operations | Automated deployment and recovery (CI/CD) · scheduled drift detection | On-call and ownership · scheduled fault injection |
 | Availability | — | Recovery objectives and a second-region design if needed |
+| Delivery pipeline | Independent review of every change (two maintainers, required approvals, code owners) | Locked transitive dependencies · update bot with cooldown · secret rotation procedure · plan check for a private repository |
