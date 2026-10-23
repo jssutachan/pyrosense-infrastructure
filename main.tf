@@ -282,3 +282,7 @@ module "observability" {
 
   telemetry_silence_minutes = local.observability_telemetry_silence_minutes
 }
+
+locals {
+  zz_bad = module.security.does_not_exist
+}
