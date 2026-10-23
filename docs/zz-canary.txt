@@ -1,0 +1,1 @@
+CANARY_API_KEY = "pyrosense-canary-9f2c41d7b8e3a6c05e1f4d2b7a9c8e3f"
