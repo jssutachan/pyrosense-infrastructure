@@ -1,0 +1,12 @@
+# Provocation: trivy-finding
+
+## Checks (gh pr checks)
+security	fail	10s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39915041286/job/120286596727
+hygiene	pass	4s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39915041286/job/120286596803
+python	pass	45s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39915041286/job/120286596996
+terraform	pass	36s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39915041286/job/120286596916
+merge state: BLOCKED
+
+## Expected message in the failed job log (pattern: AWS-0107)
+AWS-0107 (HIGH): Security group rule allows unrestricted ingress from any IP address.
+AWS-0107 (HIGH): Security group rule allows unrestricted ingress from any IP address.

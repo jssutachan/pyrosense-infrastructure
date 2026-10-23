@@ -1,0 +1,11 @@
+# Provocation: py-mypy
+
+## Checks (gh pr checks)
+python	fail	43s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39916585507/job/120291355668
+hygiene	pass	5s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39916585507/job/120291355553
+security	pass	8s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39916585507/job/120291355655
+terraform	pass	33s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39916585507/job/120291355452
+merge state: BLOCKED
+
+## Expected message in the failed job log (pattern: Incompatible return value)
+scripts/zz_mypy.py:6: error: Incompatible return value type (got "str", expected "int")  [return-value]

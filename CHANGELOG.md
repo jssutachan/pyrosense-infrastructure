@@ -240,6 +240,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests pinning the observability contracts of the handler: the six EMF
   counter names and their dimension, and the `Processing failed` prefix of the
   transient-failure log line, which a CloudWatch metric filter counts.
+- CI runs the full static quality gate as four required checks on every pull
+  request and push to `develop` and `main`: `python` (`make py-lint py-type
+  py-test`), `terraform` (`make fmt-check validate lint`), `security`
+  (`make sec`) and `hygiene` (`make guard ci-lint`). Every job calls the same
+  `make` targets used locally, so the gate is defined once. (ADR-0022)
+- `.tool-versions`: the single pin for Python, Terraform, TFLint, Trivy,
+  gitleaks and actionlint, read natively by `actions/setup-python` and by
+  asdf/mise locally. (ADR-0022)
+- `scripts/tooling/`: `install-tool.sh` installs a pinned binary only after
+  checking its SHA-256 against `checksums.txt`, committed in this repository;
+  `check-tool-versions.sh` backs `make tools`; `trivy-gate.sh` is the Trivy
+  gate; `guard.sh` backs `make guard`. (ADR-0022)
+- `make guard` (`scripts/tooling/guard.sh`): fails if a plan, state, tfvars,
+  backend configuration, CSR or key is tracked, including files added with
+  `git add -f`, and if a committed `*.example` template carries an email
+  address outside the reserved example domains or a 12-digit AWS account id.
+  Findings report file and line only, never the value, because CI logs are
+  public.
+- `make ci-lint`: lints the GitHub Actions workflows with actionlint, also run
+  as a pre-commit hook on workflow changes.
+- `make py-fix`: fixes and formats Python in place; the pre-commit ruff hook
+  calls it.
+- Repository ruleset for `develop` and `main`, kept as
+  `docs/github/ruleset-protected-branches.json`: the four checks required,
+  pull request required, no force push, no deletion, empty bypass list.
+- ADR-0022 — CI quality gate and pinned, hash-verified toolchain.
+- `docs/ci-cd.md`: how the CI/CD pipeline is designed and why, how each gate
+  was proven, what testing it found, and what it does not cover yet. Grows with
+  each CI/CD stage.
+- `docs/evidence/ci-c1-2026-10-23/`: evidence of the CI quality gate: the first
+  green run, the ruleset, a rejected direct push, a public-log scan with no
+  sensitive values, and 15 provoked failures, each blocked by the expected check.
 
 ### Changed
 
@@ -283,6 +315,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Root `main.tf`: the ingest timeout comment records the measured Duration
   (p99 1711 ms, maximum 1715 ms over 21 invocations) and the decision to keep
   30 s, replacing "no Duration data exists yet". (ADR-0021)
+- CI pipeline (`.github/workflows/ci.yml`): no longer path-filtered (a change
+  confined to `scripts/` used to merge with no check), runs on
+  `ubuntu-24.04` instead of `ubuntu-latest`, sets `timeout-minutes` on every
+  job, and checks out with `persist-credentials: false`. (ADR-0022)
+- `Makefile`: recipes run in bash with `-euo pipefail`, so a failure on the
+  left side of a pipe fails the target; `make init` verifies the lock file
+  (`-lockfile=readonly`) instead of rewriting it; `make lint` downloads the
+  TFLint plugins first (`lint-init`); `make sec` is split into `sec-config`
+  (Trivy) and `secrets` (gitleaks); `make tools` compares installed versions
+  with the pins instead of only checking presence; `make check` adds `guard`
+  and `ci-lint`.
+- `requirements-dev.txt`: exact pins (`==`) instead of compatible-release
+  specifiers, matching the environment the suite was last verified with.
+  (ADR-0022)
+- `.pre-commit-config.yaml`: gitleaks and ruff run as local hooks that use the
+  installed binaries instead of their own pinned copies, which had drifted from
+  the virtualenv and PATH (ruff 0.16.4 vs 0.16.8, gitleaks 8.30.0 vs 8.30.1);
+  added an actionlint hook. (ADR-0022)
+- Trivy pinned to 0.75.0 (from 0.71.2; some current checks require ≥ 0.72.0).
+  `trivy.yaml` uses the checks embedded in the pinned binary
+  (`rego.skip-check-update`) and scans Terraform source only
+  (`misconfiguration.scanners: [terraform]`); `make sec-config` removes any
+  cached checks bundle first, so local runs use the same rules as CI.
+  (ADR-0022)
+- `make secrets` scans the full git history (`gitleaks git`) instead of the
+  files on disk (`gitleaks detect --no-git`); CI checks out full history for
+  it.
+- Root `README.md`: new "Continuous integration" section; status paragraph,
+  tech stack, repository structure, prerequisites, roadmap and ADR index
+  updated for the CI gate.
+- `docs/production-readiness.md`: new "Delivery pipeline (CI/CD)" section and
+  summary row.
+- ADR-0022 accepted after the C1 run.
+- Root `README.md`: CI/CD link, CI gate row in "Proof it works", "Proven, not
+  assumed" paragraph, test setup with `uv` and the pinned Python, `make py-test`.
+- `docs/evidence/README.md`: index of evidence sets (end-to-end run, CI gate).
 
 ### Fixed
 
@@ -322,6 +390,24 @@ queue", wording already corrected inside the module; it now states the
   ADR-0015 instead of "the open ADR", and `persistence.py` cites ADR-0008 for
   deduplication; `structured_logging.py` no longer refers to a non-existent
   `lambda_log_level` setting.
+- `make check` did not enforce the 90 % branch-coverage floor: `make py-test`
+  ran pytest without `--cov`, so `fail_under` was configured but never
+  applied. It now runs with coverage, locally and in CI.
+- Trivy logs "Error parsing file" and still exits 0, even with
+  `--exit-code 1`, so an unparsed file passed the gate unscanned.
+  `scripts/tooling/trivy-gate.sh` fails the gate on any parse error. (debt #8)
+- Trivy parsed saved plans (`tfplan`, `tfplan.json`) as configuration, the
+  most likely cause of the parse error in the 2026-10-15 run; it now scans
+  Terraform source only. (debt #8)
+- A secret committed and deleted in a later commit was not detected:
+  `gitleaks detect --no-git` scanned only the files on disk.
+- `.pre-commit-config.yaml` stated that "the same checks run in CI"; CI ran
+  only the Python half. The statement is now true.
+- The CI secret scan reported only the number of leaks. `make secrets` now runs
+  `scripts/tooling/gitleaks-gate.sh`, which prints rule, file, line and commit
+  for each finding from a JSON report, without the secret (redacted) or the
+  commit author's name and email, which `--verbose` would publish in a public
+  log. (ADR-0022)
 
 ### Security
 
@@ -385,3 +471,19 @@ queue", wording already corrected inside the module; it now states the
   confused-deputy pattern AWS documents for service principals on encrypted
   SNS topics. Applied only after a real alarm proved the path with the
   previous statement, and re-proven with a second alarm. (ADR-0010, ADR-0021)
+- Every third-party GitHub Action is pinned to a full commit SHA, with the
+  version in a comment, instead of a mutable tag, the vector of the
+  `tj-actions/changed-files` (CVE-2025-30066) and Trivy (GHSA-69fq-xp46-6x23)
+  compromises. Only first-party actions are used (`actions/*`,
+  `hashicorp/setup-terraform`). (ADR-0022)
+- CI binaries are verified against SHA-256 hashes committed in
+  `scripts/tooling/checksums.txt`, so a release whose assets and checksums
+  file were both replaced still fails to install. New versions are adopted
+  after a 14-day cooldown. (ADR-0022)
+- A plan, state, tfvars, backend configuration, CSR or key tracked in git
+  fails CI (`make guard`), so a saved plan with sensitive values in clear text
+  cannot be merged even when forced past `.gitignore`. Pushing the branch
+  already publishes it; `.gitignore` remains the prevention. (debt #41)
+- Secret scanning covers every commit in the history, so a secret removed in a
+  later commit of the same pull request is still caught before it reaches
+  `develop`.

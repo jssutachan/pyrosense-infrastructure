@@ -40,6 +40,7 @@ belongs to a persistent layer (see "Not verified / deferred").
 | `queue_arn` | string | standard SQS ARN | `module.messaging.queue_arn` |
 | `queue_url` | string | `https://`, not `.fifo` | `module.messaging.queue_url` |
 | `kms_key_arn` | string | KMS key ARN, not an alias | `module.security.kms_key_arn` |
+| `permissions_boundary_arn` | `string` | IAM managed policy ARN (`arn:aws…:iam::<12 digits>:policy/…`); required, no default | `data.aws_iam_policy.workload_boundary.arn` (policy created by `bootstrap/ci-identity`, ADR-0023) |
 | `fleet_client_csr_pem` | string | PEM CSR, ≤ 4096 characters | `file()` of a CSR path set in the gitignored tfvars |
 
 The topic-segment validations exclude `$` (reserved topics), `+`, `#` and

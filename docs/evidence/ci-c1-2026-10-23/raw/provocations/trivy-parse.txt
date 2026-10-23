@@ -1,0 +1,11 @@
+# Provocation: trivy-parse
+
+## Checks (gh pr checks)
+security	fail	8s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39915194188/job/120287085102
+terraform	fail	8s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39915194188/job/120287085193
+hygiene	pass	6s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39915194188/job/120287085168
+python	pass	42s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39915194188/job/120287084742
+merge state: BLOCKED
+
+## Expected message in the failed job log (pattern: trivy-gate: Trivy could not parse)
+trivy-gate: Trivy could not parse at least one file (see 'Error parsing' above); the scan is incomplete, so the gate fails.

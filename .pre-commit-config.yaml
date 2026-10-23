@@ -1,7 +1,12 @@
 # Local quality gate. Install once with: pre-commit install
-# The same checks run in CI, because this hook is bypassable with --no-verify.
+# Early feedback only: this hook is bypassable with --no-verify, so CI
+# (.github/workflows/ci.yml) is the authority and runs the full gate.
 #
-# Required binaries on PATH: terraform, tflint, trivy
+# Hooks that run a binary (terraform, tflint, trivy, gitleaks, actionlint,
+# ruff) use the version installed on PATH or in .venv, which `make tools`
+# checks against .tool-versions and requirements-dev.txt. No hook pins its
+# own copy: two copies of one tool were how the hook and CI drifted (debt #54).
+#
 # Pin revisions with: pre-commit autoupdate
 
 repos:
@@ -22,12 +27,6 @@ repos:
       - id: detect-private-key
       - id: no-commit-to-branch
 
-  # --------------------------------------------------------------- secrets
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.30.0
-    hooks:
-      - id: gitleaks
-
   # ------------------------------------------------------------- terraform
   - repo: https://github.com/antonbabenko/pre-commit-terraform
     rev: v1.109.0
@@ -47,10 +46,24 @@ repos:
         args:
           - --args=--severity=HIGH,CRITICAL
 
-  # ---------------------------------------------------------------- python
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.4
+  # ------------------------------------------------- pinned local binaries
+  - repo: local
     hooks:
-      - id: ruff-check
-        args: [--fix]
-      - id: ruff-format
+      - id: gitleaks
+        name: gitleaks (staged changes)
+        entry: gitleaks git --pre-commit --redact --staged --verbose
+        language: system
+        pass_filenames: false
+
+      - id: ruff
+        name: ruff (fix + format)
+        entry: make py-fix
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: actionlint
+        name: actionlint
+        entry: actionlint
+        language: system
+        files: ^\.github/workflows/.*\.ya?ml$

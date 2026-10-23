@@ -1,0 +1,11 @@
+# Provocation: tf-validate
+
+## Checks (gh pr checks)
+terraform	fail	29s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39914353738/job/120284395584
+hygiene	pass	5s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39914353738/job/120284395836
+python	pass	52s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39914353738/job/120284395807
+security	pass	10s	https://github.com/<OWNER>/pyrosense-infrastructure/actions/runs/39914353738/job/120284395874
+merge state: BLOCKED
+
+## Expected message in the failed job log (pattern: Unsupported attribute)
+^[[31m│^[[0m ^[[0m^[[1m^[[31mError: ^[[0m^[[0m^[[1mUnsupported attribute^[[0m

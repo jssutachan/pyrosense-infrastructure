@@ -34,6 +34,19 @@ variable "source_dir" {
   }
 }
 
+variable "permissions_boundary_arn" {
+  description = "ARN of the workload permissions boundary (bootstrap/ci-identity, ADR-0023). Set on every IAM role this module creates: the pipeline may only create roles that carry it, and it caps what they can ever do."
+  type        = string
+
+  # Required, no default: a role created without the boundary would be
+  # rejected by the pipeline's apply role, so failing here gives the reason
+  # in plan instead of an AccessDenied in apply.
+  validation {
+    condition     = can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:policy/[A-Za-z0-9+=,.@_/-]+$", var.permissions_boundary_arn))
+    error_message = "permissions_boundary_arn must be the ARN of an IAM managed policy."
+  }
+}
+
 # -----------------------------------------------------------------------------
 # Upstream modules — security, messaging, storage, alerting
 # -----------------------------------------------------------------------------

@@ -32,21 +32,35 @@ data "aws_caller_identity" "current" {}
 
 # S3 server access logging is deliberately disabled on the state bucket.
 #
-# This bucket has exactly one consumer — Terraform, run from the operator's
-# workstation — and CloudTrail already records S3 API calls at the account
-# level, attributed to the calling identity. Direct anonymous access is
-# impossible: full Public Access Block below, plus a bucket policy denying any
-# request where aws:SecureTransport is false.
+# Who uses this bucket (re-evaluated 2026-10-23, when the CI/CD pipeline got
+# an AWS identity; ADR-0023):
+#   - the operator, from the workstation;
+#   - pyrosense-ci-plan: reads the main state and takes its lock;
+#   - pyrosense-ci-apply-demo: reads and writes the main state, takes its lock.
+# IAM limits both pipeline roles to those two objects
+# (bootstrap/ci-identity/permissions.tf), and only this repository's workflow
+# runs, started by the maintainer, can assume them. Direct anonymous access
+# is impossible: full Public Access Block below, plus a bucket policy denying
+# any request where aws:SecureTransport is false.
 #
-# Enabling access logging would require a second bucket, which would itself
-# trigger the same rule; the recursion has no terminating case that adds real
-# auditing value at this scale.
+# What is recorded without access logging: every issue of pipeline
+# credentials (sts:AssumeRoleWithWebIdentity, with the workflow's subject)
+# and every bucket-level change are CloudTrail management events, kept 90
+# days in Event History. What is not recorded: object reads and writes.
+# GetObject and PutObject are CloudTrail data events, logged only by a trail
+# configured for them. (The previous version of this comment said CloudTrail
+# records "S3 API calls"; that holds for bucket-level calls only.)
 #
-# Confirmed against trivy 0.71.2 on 2026-09-22 (rule AWS-0089, "Bucket has
-# logging disabled").
-# Revisit if: the state bucket gains consumers beyond Terraform, a CI runner
-# assumes a deploy role against it, or an audit requirement mandates
-# object-level access records.
+# Accepted for the demo: the state of an ephemeral environment, two narrowly
+# scoped roles, and access logging would need a second bucket that triggers
+# this same rule. Production needs object-level auditing of state: a trail
+# with S3 data events for this bucket (production readiness, section 9).
+#
+# Confirmed against trivy 0.71.2 on 2026-09-22 and 0.75.0 on 2026-10-23
+# (rule AWS-0089, "Bucket has logging disabled", LOW).
+# Revisit if: a production environment gets a pipeline role, the state holds
+# more than the demo's values, or an audit requirement mandates object-level
+# access records.
 #trivy:ignore:AVD-AWS-0089
 resource "aws_s3_bucket" "state" {
   bucket = "pyrosense-tfstate-${data.aws_caller_identity.current.account_id}"

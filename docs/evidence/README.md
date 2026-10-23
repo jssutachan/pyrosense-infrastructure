@@ -1,8 +1,15 @@
-# PyroSense — End-to-end test evidence
+# PyroSense — Test evidence
 
-This folder holds the results of testing PyroSense on **real AWS infrastructure**: what was tested, how, what was observed, and where each piece of proof is. Every number on this page is taken from the raw outputs of the run, which are kept (redacted) next to the report.
+This folder holds the proof behind every claim in the repository: what was tested, how, what was observed, and where each raw output is. Every number is taken from the raw outputs, kept (redacted) next to each report.
 
-**Latest run:** v1.0 · 2026-10-15 · commit 981aae6 · region us-east-1 · [full results](v1.0-2026-10-15/results.md)
+| Evidence set | What it proves | Date |
+|---|---|---|
+| [v1.0-2026-10-15/](v1.0-2026-10-15/results.md) | The whole system on **real AWS**: no message lost, alerts in seconds, failures detected, security controls hold (this page) | 2026-10-15 |
+| [ci-c1-2026-10-23/](ci-c1-2026-10-23/README.md) | The **CI quality gate**: clean code passes, and every one of 15 deliberately broken changes was blocked from merging. Design: [docs/ci-cd.md](../ci-cd.md) | 2026-10-23 |
+
+The rest of this page covers the end-to-end run.
+
+**Latest end-to-end run:** v1.0 · 2026-10-15 · commit 981aae6 · region us-east-1 · [full results](v1.0-2026-10-15/results.md)
 
 ---
 
@@ -156,4 +163,4 @@ The account ID, the IoT endpoint prefix, email addresses, user and host names an
 
 ## Reproducing
 
-These tests are not yet packaged for third parties: they were run by the operator against a dedicated demo account. Packaging them as scripts that the CI/CD pipeline can run is planned. Until then, every raw output needed to audit the results is in this folder.
+These tests are not yet packaged for third parties: they were run by the operator against a dedicated demo account. Packaging them as scripts that the CI/CD pipeline can run is planned ([docs/ci-cd.md](../ci-cd.md), stage C4). Until then, every raw output needed to audit the results is in this folder.

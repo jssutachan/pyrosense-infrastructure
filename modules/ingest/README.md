@@ -76,6 +76,7 @@ decision: values and ownership are ADR-0020. The module only validates them.
 | `environment` | string | `demo` \| `prod` | `var.environment` |
 | `source_dir` | string | contains `handler.py` and `config.py` | `"${path.root}/src/ingest_lambda"` |
 | `kms_key_arn` | string | key ARN regex (same literal as alerting, debt #21) | `module.security.kms_key_arn` |
+| `permissions_boundary_arn` | `string` | IAM managed policy ARN (`arn:aws…:iam::<12 digits>:policy/…`); required, no default | `data.aws_iam_policy.workload_boundary.arn` (policy created by `bootstrap/ci-identity`, ADR-0023) |
 | `queue_arn` | string | — | `module.messaging.queue_arn` |
 | `queue_message_retention_seconds` | number | > 0 | `module.messaging.message_retention_seconds` (new) |
 | `dlq_message_retention_seconds` | number | > 0 | `module.messaging.dlq_message_retention_seconds` (new) |

@@ -1,0 +1,16 @@
+id	failed_checks	passed_checks	merge_state	expected_message
+tf-fmt	terraform	hygiene,python,security	BLOCKED	yes
+tf-validate	terraform	hygiene,python,security	BLOCKED	yes
+tf-lint	terraform	hygiene,python,security	BLOCKED	yes
+tf-lock	terraform	hygiene,python,security	BLOCKED	yes
+tf-pin	terraform	hygiene,python,security	BLOCKED	yes
+trivy-finding	security	hygiene,python,terraform	BLOCKED	yes
+trivy-parse	security,terraform	hygiene,python	BLOCKED	yes
+secret-history	security	hygiene,python,terraform	BLOCKED	yes
+py-ruff	python	hygiene,security,terraform	BLOCKED	yes
+py-mypy	python	hygiene,security,terraform	BLOCKED	yes
+py-test	python	hygiene,security,terraform	BLOCKED	yes
+py-coverage	python	hygiene,security,terraform	BLOCKED	yes
+guard-name	hygiene	python,security,terraform	BLOCKED	yes
+guard-content	hygiene	python,security,terraform	BLOCKED	yes
+actionlint	hygiene	python,security,terraform	BLOCKED	yes

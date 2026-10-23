@@ -1,0 +1,12 @@
+# Template for bootstrap/ci-identity/terraform.tfvars, which is never committed.
+# The values are public on GitHub; they stay out of the repository so the
+# code carries no personal identifiers. Get them with:
+#
+#   gh api repos/<owner>/<repo> --jq '.owner.login, .owner.id, .name, .id'
+#   gh api users/<your-login> --jq .id
+
+github_owner         = "<GITHUB_LOGIN>"
+github_owner_id      = "<OWNER_ID>"
+github_repository    = "pyrosense-infrastructure"
+github_repository_id = "<REPOSITORY_ID>"
+github_actor_ids     = ["<YOUR_USER_ID>"]

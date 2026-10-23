@@ -1,6 +1,21 @@
 # Trivy configuration for pyrosense-infrastructure.
 # Committed so local runs and CI scan the same tree with the same rules.
 
+# Use the checks embedded in the pinned binary (.tool-versions) instead of
+# downloading the latest bundle on every run. The bundle tag is a floating
+# major (mirror.gcr.io/aquasec/trivy-checks:2 in 0.75.0), so the same commit
+# could pass on Monday and fail on Friday with no change in this repository.
+# Rules move forward when the binary is bumped, through a reviewed PR (ADR-0022).
+rego:
+  skip-check-update: true
+
+misconfiguration:
+  # Terraform source only. The default list also parses saved plans
+  # (terraformplan-json, terraformplan-snapshot): a stray tfplan in the
+  # working tree was scanned as code and broke the run (debt #8).
+  scanners:
+    - terraform
+
 scan:
   skip-dirs:
     - .venv
