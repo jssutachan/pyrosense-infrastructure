@@ -146,3 +146,8 @@ variable "iot_fleet_client_csr_path" {
     error_message = "iot_fleet_client_csr_path must point to the CSR, never to the private key (*.key)."
   }
 }
+
+variable "zz_lint" {
+  type    = string
+  default = "x"
+}
