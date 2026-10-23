@@ -1,0 +1,145 @@
+name: OIDC probe
+
+# Proves the pipeline identity (ADR-0023) end to end without creating
+# anything: each job obtains AWS credentials through OIDC, shows which role it
+# became, and checks that what the role must NOT do is refused by AWS.
+#
+#   plan-role   pull requests that change the identity or this probe:
+#               the plan role works; writes are refused; the apply role
+#               cannot be assumed from a pull request
+#   apply-role  manual run, in the GitHub environment `demo` (human approval):
+#               the apply role works; a role without the workload boundary,
+#               a resource of another environment and the pipeline's own
+#               identity are all refused
+#
+# Not a required check: it needs AWS and runs only when the identity changes.
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - .github/workflows/oidc-probe.yml
+      - bootstrap/ci-identity/**
+      - scripts/ci/oidc-probe.sh
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oidc-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: us-east-1
+  # Probe resources are never meant to exist. If AWS ever allows one, the
+  # job fails and the cleanup step removes it.
+  PROBE_NAME: oidc-probe
+
+jobs:
+  plan-role:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write # request the OIDC token; grants nothing in AWS by itself
+    env:
+      PLAN_ROLE_ARN: ${{ secrets.AWS_PLAN_ROLE_ARN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Show the claims AWS will check
+        run: scripts/ci/oidc-probe.sh claims
+
+      - name: Assume the plan role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: plan-probe-${{ github.run_id }}
+          role-duration-seconds: 900
+          mask-aws-account-id: true
+
+      - name: Who am I
+        run: aws sts get-caller-identity --query Arn --output text
+
+      # The same lookup the main configuration's plan makes
+      # (data "aws_iam_policy" "workload_boundary").
+      - name: Allowed - find the workload boundary by name
+        run: >-
+          aws iam list-policies --scope Local
+          --query "Policies[?PolicyName=='pyrosense-workload-boundary'].PolicyName" --output text
+
+      - name: Refused - create a queue with the plan role
+        run: >-
+          scripts/ci/oidc-probe.sh expect-denied "plan role creates a queue" --
+          aws sqs create-queue --queue-name "pyrosense-demo-${PROBE_NAME}"
+
+      - name: Refused - assume the apply role from a pull request
+        run: scripts/ci/oidc-probe.sh expect-assume-denied "${PLAN_ROLE_ARN%ci-plan}ci-apply-demo"
+
+      - name: Clean up anything AWS should have refused
+        if: failure()
+        run: aws sqs delete-queue --queue-url "$(aws sqs get-queue-url --queue-name "pyrosense-demo-${PROBE_NAME}" --query QueueUrl --output text 2>/dev/null)" 2>/dev/null || true
+
+  apply-role:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # The environment's protection rules run before the job starts: no
+    # runner, no token and no environment secret until the reviewer approves.
+    environment: demo
+    permissions:
+      contents: read
+      id-token: write # request the OIDC token; grants nothing in AWS by itself
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Show the claims AWS will check
+        run: scripts/ci/oidc-probe.sh claims
+
+      - name: Assume the apply role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_APPLY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: apply-probe-${{ github.run_id }}
+          role-duration-seconds: 900
+          mask-aws-account-id: true
+
+      - name: Who am I
+        run: aws sts get-caller-identity --query Arn --output text
+
+      - name: Allowed - find the workload boundary by name
+        run: >-
+          aws iam list-policies --scope Local
+          --query "Policies[?PolicyName=='pyrosense-workload-boundary'].PolicyName" --output text
+
+      # The escalation test: a role with no boundary could be given any policy.
+      - name: Refused - create a role without the workload boundary
+        run: >-
+          scripts/ci/oidc-probe.sh expect-denied "apply role creates an unbounded role" --
+          aws iam create-role --role-name "pyrosense-demo-${PROBE_NAME}"
+          --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+
+      - name: Refused - create a resource of another environment
+        run: >-
+          scripts/ci/oidc-probe.sh expect-denied "apply role creates a prod queue" --
+          aws sqs create-queue --queue-name "pyrosense-prod-${PROBE_NAME}"
+
+      - name: Refused - change the pipeline's own role
+        run: >-
+          scripts/ci/oidc-probe.sh expect-denied "apply role tags its own role" --
+          aws iam tag-role --role-name pyrosense-ci-apply-demo --tags Key=probe,Value=denied
+
+      - name: Clean up anything AWS should have refused
+        if: failure()
+        run: |
+          aws iam delete-role --role-name "pyrosense-demo-${PROBE_NAME}" 2>/dev/null || true
+          aws sqs delete-queue --queue-url "$(aws sqs get-queue-url --queue-name "pyrosense-prod-${PROBE_NAME}" --query QueueUrl --output text 2>/dev/null)" 2>/dev/null || true
+          aws iam untag-role --role-name pyrosense-ci-apply-demo --tag-keys probe 2>/dev/null || true

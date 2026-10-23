@@ -8,7 +8,7 @@ repository for the first time.
 | Stage | What it adds | Status |
 |---|---|---|
 | **C1 — Static CI** | The full quality gate runs on every pull request as four required checks | ✅ Done · [evidence](evidence/ci-c1-2026-10-23/README.md) · [ADR-0022](adr/) |
-| C2 — Pipeline identity | AWS access for the pipeline through OIDC: no stored keys, a read-only plan role and a scoped apply role | ⬜ Next |
+| **C2 — Pipeline identity** | AWS access for the pipeline through OIDC: no stored keys, a read-only plan role and a scoped apply role that cannot escalate | 🔄 In progress · [section 8](#8-pipeline-identity-c2) · [ADR-0023](adr/0023-pipeline-identity-oidc-and-workload-boundary.md) |
 | C3 — Plan in pull requests | `terraform plan` on every pull request, summarised without sensitive values | ⬜ Planned |
 | C4 — Manual delivery to `demo` | Deploy and destroy from the pipeline, behind a human approval | ⬜ Planned |
 | C5 — Upkeep | Dependency updates and scheduled drift detection | ⬜ Planned |
@@ -283,3 +283,156 @@ targets, so the same command reproduces the failure locally.
 
 **If a secret is ever pushed:** rotate it first. Deleting the commit does not
 un-publish it.
+
+---
+
+## 8. Pipeline identity (C2)
+
+C1 runs without any cloud access. From C3 on, the pipeline has to call AWS:
+`terraform plan` in pull requests, then apply and destroy of `demo`. This
+section explains how it gets that access and why that access cannot be
+turned against the account. The decision record is ADR-0023; the code is
+[`bootstrap/ci-identity/`](../bootstrap/ci-identity/).
+
+### 8.1 No keys: credentials that exist for one job
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant J as Workflow job<br/>(id-token: write)
+    participant G as GitHub OIDC provider
+    participant S as AWS STS
+    participant I as IAM role trust policy
+    J->>G: request a token for audience sts.amazonaws.com
+    G-->>J: signed JWT: repository, owner, actor, event, environment...
+    J->>S: AssumeRoleWithWebIdentity(role, JWT)
+    S->>S: verify the signature against the registered identity provider
+    S->>I: compare the claims with the role's conditions
+    I-->>S: all conditions match
+    S-->>J: temporary credentials (15 to 60 min)
+```
+
+No access key exists for the pipeline, so none can leak from a secret store
+or a log. `id-token: write` only lets the job *ask* GitHub for a token; what
+the token is worth is decided in AWS, by the role's trust policy.
+
+### 8.2 Two roles
+
+| | `pyrosense-ci-plan` | `pyrosense-ci-apply-demo` |
+|---|---|---|
+| Used by | `terraform plan` in pull requests (C3) | apply and destroy of `demo` (C4) |
+| Assumable from | a pull request of this repository | a job in the GitHub environment `demo`, after the maintainer approves it |
+| Reads | project configuration (no data), main state | the same |
+| Writes | only the state lock file | the state, and resources named `pyrosense-demo-*` |
+| Can create IAM roles | no | only `pyrosense-demo-*` roles that carry the workload boundary |
+
+Splitting them keeps the job that runs on every pull request unable to change
+anything. The environment approval happens **before** the job starts: until
+the maintainer approves, there is no runner, no token and no environment
+secret.
+
+### 8.3 Who can assume them: the trust policies
+
+Every condition is an exact match (`StringEquals`). A missing or misspelled
+claim fails closed.
+
+| Claim | Plan role | Apply role | Why |
+|---|---|---|---|
+| `aud` | `sts.amazonaws.com` | `sts.amazonaws.com` | the token was minted for AWS |
+| `sub` | `repo:<owner>@<id>/<repo>@<id>:pull_request` | `repo:<owner>@<id>/<repo>@<id>:environment:demo` | this repository **and** this context |
+| `repository_id`, `repository_owner_id` | this repository's ids | the same | numeric ids cannot be re-registered by someone else after a rename or deletion |
+| `actor_id` | the maintainer | the maintainer | a run started by anyone else gets no credentials, including a pull request from a fork |
+
+The `sub` uses GitHub's **immutable** format (owner and repository carry
+their numeric ids), the default for repositories created on or after
+2026-07-15.
+
+### 8.4 What they can do, and why the apply role cannot escalate
+
+The apply role has to create IAM roles: the configuration creates the two IoT
+topic rule roles and the Lambda execution role. Any identity that can write a
+role's policy and hand that role to a Lambda function it creates can run code
+with any permission it likes. Limiting role names does not help:
+`pyrosense-demo-anything` is a valid name.
+
+A **permissions boundary** closes this. It is a ceiling: a role's effective
+permissions are the intersection of its own policies and its boundary.
+
+```mermaid
+flowchart LR
+    A["Apply role"] -->|"iam:CreateRole only WITH<br/>pyrosense-workload-boundary"| R["pyrosense-demo-* role"]
+    A -->|"iam:PassRole only to<br/>lambda / iot"| F["Lambda function /<br/>IoT topic rule"]
+    R --> E{"effective permissions =<br/>role policy ∩ boundary"}
+    E --> D["at most: send/receive project queues,<br/>write project logs, put items and objects,<br/>publish alerts, use account KMS keys"]
+    A -. "explicit Deny" .-> X["remove or replace a boundary;<br/>any IAM write on the pipeline's<br/>own roles, policies, identity provider"]
+```
+
+So a role created by the pipeline with `"Action": "*"` still gets, at most,
+the data path of PyroSense. The modules keep granting each role exactly what
+it needs (one queue, one table, one key); the boundary only caps what any
+pipeline-created role could ever reach.
+
+How each permission is scoped, tightest first:
+
+| Scope | Used for |
+|---|---|
+| One object | the state file and its lock file |
+| Name prefix `pyrosense-demo-*` | queues, topics, tables, buckets, roles, functions, log groups, alarms, IoT things, policies and rules |
+| Tags `Project=PyroSense`, `Environment=demo` | KMS keys: their ARN is a random id, so the tags are checked when a key is created and on every later call |
+| `*` | configuration reads, and creates that have no ARN yet (`kms:CreateKey` with the tag condition, `iot:CreateCertificateFromCsr`, event source mappings limited by function ARN) |
+
+### 8.5 Where the permission list came from
+
+Not from a tutorial and not from `AdministratorAccess` trimmed by trial and
+error. CloudTrail Event History recorded every call Terraform made during
+three full deploy/destroy cycles (2026-10-14..20): **116 distinct API calls
+across 12 services**. That list was necessary but not sufficient:
+
+| Gap | Example | How it was closed |
+|---|---|---|
+| API name ≠ IAM action | `PutBucketEncryption` → `s3:PutEncryptionConfiguration`; `CreateFunction20150331` → `lambda:CreateFunction` | translated by hand |
+| Permissions that never appear as events | `iam:PassRole`, `iam:TagRole` behind a create with tags, `kms:CreateGrant` used by Lambda and DynamoDB | AWS service authorization reference |
+| Data events are not in Event History | `sqs:GetQueueAttributes`, S3 object deletes when emptying a bucket on destroy | added from the provider's behaviour |
+
+It is a first version. C3 runs every read for real and C4 every write; an
+`AccessDenied` there is a missing line, added with its reason, never a
+wildcard.
+
+### 8.6 Where the identity lives
+
+The pipeline identity must outlive every `demo` cycle and must not be
+editable by the pipeline itself, so it is a separate, long-lived stack,
+applied by the operator:
+
+| Stack | State | Applied by | Lifetime |
+|---|---|---|---|
+| `bootstrap/state-backend` | local (cannot store its own state) | operator | permanent |
+| `bootstrap/ci-identity` | state bucket, own key, unreadable by the pipeline roles | operator | permanent |
+| main configuration | state bucket, `pyrosense/terraform.tfstate` | operator today; the pipeline from C4 | `demo`: one test cycle |
+
+The main configuration reads the boundary by name. If `bootstrap/ci-identity`
+has not been applied, `terraform plan` fails on that lookup before anything
+is created.
+
+### 8.7 GitHub configuration
+
+| Setting | Value | Why |
+|---|---|---|
+| Repository secret `AWS_PLAN_ROLE_ARN` | output `plan_role_arn` | an ARN contains the account id; a non-secret `with:` input is printed in the public log |
+| Environment `demo` → required reviewer | the maintainer | nothing deploys without a person deciding it |
+| Environment `demo` → deployment branches | the default branch | changes reach AWS only after review and merge |
+| Environment `demo` → secret `AWS_APPLY_ROLE_ARN` | output `apply_role_arn` | unavailable to a job until the reviewer approves |
+
+### 8.8 How it is proven
+
+[`.github/workflows/oidc-probe.yml`](../.github/workflows/oidc-probe.yml) gets
+real credentials and creates nothing. For each role it shows the claims AWS
+evaluated and the role it became, then asserts that forbidden actions are
+**refused by AWS**:
+
+| Job | Must be allowed | Must be refused |
+|---|---|---|
+| `plan-role` (pull requests touching the identity) | assume the plan role; find the boundary by name | create a queue; assume the apply role from a pull request |
+| `apply-role` (manual, environment `demo`) | assume the apply role; find the boundary by name | create a role **without** the boundary; create a `pyrosense-prod-*` resource; tag the pipeline's own role |
+
+Results and evidence: added when C2 closes.

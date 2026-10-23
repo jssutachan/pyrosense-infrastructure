@@ -165,9 +165,12 @@ data "aws_iam_policy_document" "assume" {
   }
 }
 
+# The workload permissions boundary (ADR-0023) caps this role; the policy
+# below remains the exact grant.
 resource "aws_iam_role" "ingest" {
-  name               = local.role_name
-  assume_role_policy = data.aws_iam_policy_document.assume.json
+  name                 = local.role_name
+  assume_role_policy   = data.aws_iam_policy_document.assume.json
+  permissions_boundary = var.permissions_boundary_arn
 
   lifecycle {
     precondition {
