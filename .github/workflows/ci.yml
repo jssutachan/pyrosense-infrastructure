@@ -1,84 +1,138 @@
-# CI — quality gates for the PyroSense ingest Lambda (Python).
+# CI — the merge gate for pyrosense-infrastructure.
 #
-# Runs on every push and pull request that touches the Python project.
-# Three gates must pass: lint+format (ruff), static types (mypy), and
-# tests+coverage (pytest). A failure blocks the merge when branch
-# protection is enabled on the target branch.
+# Every job calls the same Makefile targets used locally (`make check`), so
+# the gate is defined once. The job names are the required status checks of
+# the protected-branches ruleset (docs/github/ruleset-protected-branches.json):
+# renaming a job silently drops it from the gate until the ruleset is updated.
 #
-# Action versions verified 2026-09-18. Pinned to major tags so patch and
-# minor updates arrive automatically; bump the major deliberately (a new
-# major can change the Node runtime the action uses).
+# No `paths:` filter, on purpose: a required check whose workflow does not run
+# never reports, and a filtered-out change merges unchecked (ADR-0022).
+#
+# Third-party actions are pinned to a full commit SHA; binaries are pinned in
+# .tool-versions and verified against scripts/tooling/checksums.txt.
 
 name: CI
 
-# When does this pipeline run?
 on:
-  push:
-    branches: [main, develop]
-    paths:
-      - "src/ingest_lambda/**"
-      - "tests/**"
-      - "pyproject.toml"
-      - "requirements-dev.txt"
-      - ".github/workflows/ci.yml"
   pull_request:
-    branches: [main, develop]
-    paths:
-      - "src/ingest_lambda/**"
-      - "tests/**"
-      - "pyproject.toml"
-      - "requirements-dev.txt"
-      - ".github/workflows/ci.yml"
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
 
-# Least privilege: this pipeline only reads the repository. It cannot push,
-# comment or touch anything else — the security pillar, applied to CI.
+# Default for every job; a job lists only what it adds.
 permissions:
   contents: read
 
-# If you push twice quickly, cancel the older run: don't burn CI minutes on
-# a commit nobody is waiting for anymore (FinOps, applied to CI).
+# A newer push to the same ref makes the older run irrelevant. Safe to cancel:
+# no job here writes outside its runner.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  TF_IN_AUTOMATION: "1"
+  TF_INPUT: "0"
+
 jobs:
-  quality:
-    name: Lint, type-check and test
-    runs-on: ubuntu-latest
-
+  python:
+    name: python
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      # 1. Get the code onto the runner.
       - name: Check out the repository
-        uses: actions/checkout@v5
-
-      # 2. Install the Python version that matches the Lambda runtime, and
-      #    cache pip downloads so repeat runs are faster (and cheaper).
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          python-version: "3.12"
-          cache: "pip"
+          persist-credentials: false
+
+      - name: Set up Python (version from .tool-versions)
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .tool-versions
+          cache: pip
           cache-dependency-path: requirements-dev.txt
 
-      # 3. Install the dev tooling (never shipped to Lambda).
       - name: Install dev dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Lint, type-check and test with the coverage floor
+        run: make py-lint py-type py-test
+
+  terraform:
+    name: terraform
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # setup-terraform resolves an empty or malformed version to the latest
+      # release, so a missing pin would install a different Terraform and
+      # stay green. Only an exact X.Y.Z passes.
+      - name: Read the pinned Terraform version
+        id: pins
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          version="$(awk '$1 == "terraform" { print $2 }' .tool-versions)"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error file=.tool-versions::terraform must be pinned to an exact X.Y.Z version (found: '${version}')"
+            exit 1
+          fi
+          echo "terraform=${version}" >> "$GITHUB_OUTPUT"
 
-      # 4. Gate 1 — lint: catch bugs and style violations.
-      - name: Lint (ruff)
-        run: ruff check .
+      # The wrapper rewrites stdout and the exit status into step outputs;
+      # make needs the plain binary and its real exit code.
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ steps.pins.outputs.terraform }}
+          terraform_wrapper: false
 
-      # 5. Gate 2 — format: fail if code is not formatted, don't reformat it.
-      - name: Format check (ruff)
-        run: ruff format --check .
+      - name: Install TFLint
+        run: scripts/tooling/install-tool.sh tflint
 
-      # 6. Gate 3 — static types: mypy in strict mode over the source.
-      - name: Type-check (mypy)
-        run: mypy
+      # tflint --init downloads the ruleset from GitHub releases; without a
+      # token it shares the anonymous API rate limit of the runner's IP.
+      - name: Format, validate and lint
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: make fmt-check validate lint
 
-      # 7. Gate 4 — tests + coverage. pyproject's fail_under=90 makes low
-      #    coverage fail the build, not just report a number.
-      - name: Test with coverage (pytest)
-        run: pytest --cov --cov-report=term-missing
+  security:
+    name: security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      # Full history: `make secrets` scans every commit, and a shallow clone
+      # would hide a secret added and then deleted inside the same PR.
+      - name: Check out the repository with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Install Trivy and gitleaks
+        run: |
+          scripts/tooling/install-tool.sh trivy
+          scripts/tooling/install-tool.sh gitleaks
+
+      # demo.tfvars is gitignored (PII); the committed template carries the
+      # same variable shapes, which is what the scanner evaluates.
+      - name: Scan for misconfigurations and secrets
+        run: make sec TFVARS=demo.tfvars.example
+
+  hygiene:
+    name: hygiene
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install actionlint
+        run: scripts/tooling/install-tool.sh actionlint
+
+      - name: Forbidden files and workflow lint
+        run: make guard ci-lint
