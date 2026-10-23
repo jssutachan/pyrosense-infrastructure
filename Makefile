@@ -1,12 +1,17 @@
 # Single entry point for the repository. Run `make help` for the catalog.
 #
-# Required tools (see README for installation):
-#   terraform >= 1.11   tflint >= 0.50   trivy   pre-commit   gitleaks
-#   Python 3.12 with requirements-dev.txt installed (ruff, mypy, pytest)
+# Tool versions are pinned in .tool-versions (binaries and Python) and
+# requirements-dev.txt (Python packages). `make tools` checks that what is
+# installed matches the pins; scripts/tooling/install-tool.sh installs them.
 #
 # `make check` is the full local gate: verification only, no file changes.
-# CI runs its Python half today; the Terraform half joins CI with the
-# Terraform workflow.
+# CI (.github/workflows/ci.yml) runs the same targets, split into jobs.
+
+# Every recipe runs in bash with errexit, nounset and pipefail: a failing
+# command anywhere in a recipe, including the left side of a pipe, fails the
+# target instead of being masked by the next command.
+SHELL       := bash
+.SHELLFLAGS := -euo pipefail -c
 
 TFVARS         ?= demo.tfvars
 BACKEND_CONFIG := config/backend.hcl
@@ -27,8 +32,9 @@ PY_PATHS := src tests scripts
 
 .DEFAULT_GOAL := help
 
-.PHONY: help tools setup hooks update-hooks fmt fmt-check init validate lint sec \
-        py-lint py-type py-test check tf-init plan apply destroy clean
+.PHONY: help tools setup hooks update-hooks fmt fmt-check init validate lint-init lint \
+        sec sec-config secrets guard ci-lint py-fix py-lint py-type py-test check \
+        tf-init plan apply destroy clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -36,28 +42,24 @@ help: ## Show this help
 
 ## ------------------------------------------------------------------- setup
 
-tools: ## Verify the required tools are installed
+tools: ## Verify installed tools match the pinned versions
+	@echo "pinned toolchain (.tool-versions):"
+	@scripts/tooling/check-tool-versions.sh "$(PY_BIN)"
 	@missing=""; \
-	for t in terraform tflint trivy pre-commit gitleaks; do \
+	for t in pre-commit; do \
 		command -v $$t >/dev/null 2>&1 || missing="$$missing $$t"; \
 	done; \
 	for t in ruff mypy pytest; do \
 		command -v $(PY_BIN)$$t >/dev/null 2>&1 || missing="$$missing $$t"; \
 	done; \
 	if [ -n "$$missing" ]; then echo "missing:$$missing"; exit 1; fi
-	@echo "all tools present:"
-	@terraform version | head -1
-	@tflint --version | head -1
-	@trivy --version | head -1
-	@pre-commit --version
-	@$(PY_BIN)ruff --version
+	@echo "python packages: see requirements-dev.txt"
 
 setup: tools hooks ## Prepare a fresh clone for development
 	@echo "ready. run 'make check' to verify the gate"
 
-hooks: ## Install the git hook and download TFLint plugins
+hooks: lint-init ## Install the git hook and download TFLint plugins
 	pre-commit install
-	tflint --init
 
 update-hooks: ## Bump pre-commit hook revisions (produces a reviewable diff)
 	pre-commit autoupdate
@@ -70,10 +72,13 @@ fmt: ## Format Terraform code in place
 fmt-check: ## Verify formatting without modifying any file
 	terraform fmt -check -recursive
 
+# -lockfile=readonly: the gate verifies .terraform.lock.hcl and never rewrites
+# it. A provider added without updating the committed lock fails here instead
+# of being resolved silently.
 init: ## Initialise every Terraform root without touching the backend
-	terraform init -backend=false
+	terraform init -backend=false -input=false -lockfile=readonly
 	@for dir in $(BOOTSTRAP_ROOTS); do \
-		terraform -chdir=$$dir init -backend=false; \
+		terraform -chdir=$$dir init -backend=false -input=false -lockfile=readonly; \
 	done
 
 validate: init ## Validate every Terraform root against the provider schema
@@ -82,18 +87,43 @@ validate: init ## Validate every Terraform root against the provider schema
 		terraform -chdir=$$dir validate; \
 	done
 
-lint: ## Lint Terraform with TFLint
+lint-init: ## Download the TFLint plugins pinned in .tflint.hcl
+	tflint --init --config "$(CURDIR)/.tflint.hcl"
+
+lint: lint-init ## Lint Terraform with TFLint
 	tflint --recursive --config "$(CURDIR)/.tflint.hcl"
 
+sec: sec-config secrets ## Scan for misconfigurations and hardcoded secrets
+
 # Two Trivy runs, both with the tfvars loaded so every expression is evaluated
-# with real values. The first is informational: it prints findings of every
-# severity and never fails. The second is the gate: --exit-code 1 makes HIGH
-# and CRITICAL findings fail `make check`. Trivy's exit code defaults to 0,
-# so without that flag the scan reports findings and the gate stays green.
-sec: ## Scan for misconfigurations and hardcoded secrets
+# with real values. The first is informational: every severity, never fails.
+# The second is the gate (scripts/tooling/trivy-gate.sh): HIGH/CRITICAL
+# findings or any file Trivy could not parse fail the target.
+#
+# trivy.yaml sets skip-check-update, so Trivy uses the checks embedded in the
+# pinned binary. A checks bundle cached by an earlier, unpinned run would take
+# precedence over the embedded one; removing it first keeps local runs on the
+# same rules as CI.
+sec-config: ## Scan Terraform for misconfigurations (Trivy)
+	trivy clean --checks-bundle
 	trivy config . --tf-vars $(TFVARS)
-	trivy config . --tf-vars $(TFVARS) --severity HIGH,CRITICAL --exit-code 1
-	gitleaks detect --no-git --redact
+	scripts/tooling/trivy-gate.sh $(TFVARS)
+
+# `gitleaks git` scans every commit, not only the files on disk: a secret
+# added in one commit and deleted in the next is still published in a public
+# repository's history. CI checks out the full history for this target.
+secrets: ## Scan the git history for hardcoded secrets (gitleaks)
+	gitleaks git --redact .
+
+guard: ## Fail on tracked plans, state, tfvars or keys, and on real values in templates
+	@scripts/tooling/guard.sh
+
+ci-lint: ## Lint the GitHub Actions workflows (actionlint)
+	actionlint
+
+py-fix: ## Fix and format Python in place (used by the pre-commit hook)
+	$(PY_BIN)ruff check --fix $(PY_PATHS)
+	$(PY_BIN)ruff format $(PY_PATHS)
 
 py-lint: ## Lint and format-check Python (no file changes)
 	$(PY_BIN)ruff check $(PY_PATHS)
@@ -102,10 +132,12 @@ py-lint: ## Lint and format-check Python (no file changes)
 py-type: ## Type-check Python
 	$(PY_BIN)mypy
 
-py-test: ## Run the Python test suite
-	$(PY_BIN)pytest
+# --cov makes pytest-cov enforce fail_under from pyproject.toml: without it
+# the 90 % branch-coverage floor is configured but never applied.
+py-test: ## Run the Python test suite with the coverage floor
+	$(PY_BIN)pytest --cov --cov-report=term-missing
 
-check: fmt-check validate lint sec py-lint py-type py-test ## Run the full gate
+check: guard fmt-check validate lint sec ci-lint py-lint py-type py-test ## Run the full gate
 
 ## -------------------------------------------------------------- terraform ops
 

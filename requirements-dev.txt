@@ -4,14 +4,16 @@
 # ships only the standard library plus the AWS SDK it already provides.
 # Install into a virtual environment: see README.md.
 #
-# Versions verified 2026-09-18 against PyPI. Compatible-release specifiers
-# (~=) allow patch/minor updates while pinning the major line, so a
-# `pip install` stays reproducible without freezing you on a stale patch.
+# Exact pins (==): the same ruff, mypy and pytest run on every machine and in
+# CI, so a gate result depends on the code, not on the day pip resolved it.
+# Versions match the environment the suite was last verified with
+# (2026-10-15). Updates arrive as reviewed pull requests (ADR-0022).
+# Transitive dependencies are not locked yet (see docs/production-readiness.md).
 
-pytest~=9.1
-pytest-cov~=7.1
-moto[all]~=5.2
-boto3~=1.43           # matches the Lambda runtime SDK; dev-only here
-ruff~=0.16
-mypy~=2.3
-boto3-stubs[dynamodb,s3,sns]~=1.43
+pytest==9.1.1
+pytest-cov==7.1.0
+moto[all]==5.2.3
+boto3==1.43.98        # matches the Lambda runtime SDK line; dev-only here
+ruff==0.16.8
+mypy==2.3.1
+boto3-stubs[dynamodb,s3,sns]==1.43.98
