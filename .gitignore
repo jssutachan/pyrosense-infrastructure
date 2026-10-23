@@ -78,3 +78,6 @@ Thumbs.db
 # Device CSRs are public material but pin one key pair; they live outside the
 # repository by design (ADR-0017) and should never be committed by accident.
 *.csr
+
+# Backend configs hold the account id; only *.example templates are committed.
+backend.hcl
