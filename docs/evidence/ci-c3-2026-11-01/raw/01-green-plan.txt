@@ -1,0 +1,73 @@
+run: 41379049759 (pull request #25, branch feat/ci-plan)
+job plan: success, 32s
+
+### Terraform plan: `demo`
+
+| Create | Update | Replace | Destroy | Unchanged |
+|---:|---:|---:|---:|---:|
+| 50 | 0 | 0 | 0 | 1 |
+
+No existing resource is destroyed or replaced.
+
+<details><summary>Created (50)</summary>
+
+- `module.alerting.aws_sns_topic.fire_alerts`
+- `module.alerting.aws_sns_topic.ops`
+- `module.alerting.aws_sns_topic_policy.fire_alerts`
+- `module.alerting.aws_sns_topic_policy.ops`
+- `module.alerting.aws_sns_topic_subscription.fire_alerts["duty-desk"]`
+- `module.alerting.aws_sns_topic_subscription.ops["operator"]`
+- `module.ingest.aws_cloudwatch_log_group.ingest`
+- `module.ingest.aws_iam_role.ingest`
+- `module.ingest.aws_iam_role_policy.ingest`
+- `module.ingest.aws_lambda_event_source_mapping.sqs`
+- `module.ingest.aws_lambda_function.ingest`
+- `module.iot.aws_cloudwatch_log_group.rule_errors`
+- `module.iot.aws_iam_role.errors`
+- `module.iot.aws_iam_role.forward`
+- `module.iot.aws_iam_role_policy.errors`
+- `module.iot.aws_iam_role_policy.forward`
+- `module.iot.aws_iot_certificate.fleet_client`
+- `module.iot.aws_iot_policy.fleet_client`
+- `module.iot.aws_iot_policy_attachment.fleet_client`
+- `module.iot.aws_iot_thing.fleet_client`
+- `module.iot.aws_iot_thing_principal_attachment.fleet_client`
+- `module.iot.aws_iot_topic_rule.telemetry`
+- `module.messaging.aws_sqs_queue.dlq`
+- `module.messaging.aws_sqs_queue.ingest`
+- `module.messaging.aws_sqs_queue_policy.tls_only["dlq"]`
+- `module.messaging.aws_sqs_queue_policy.tls_only["ingest"]`
+- `module.messaging.aws_sqs_queue_redrive_allow_policy.dlq`
+- `module.messaging.aws_sqs_queue_redrive_policy.ingest`
+- `module.observability.aws_cloudwatch_dashboard.pipeline`
+- `module.observability.aws_cloudwatch_log_metric_filter.rule_error_documents`
+- `module.observability.aws_cloudwatch_log_metric_filter.transient_failures`
+- `module.observability.aws_cloudwatch_metric_alarm.this["alert-publish-failures"]`
+- `module.observability.aws_cloudwatch_metric_alarm.this["dlq-not-empty"]`
+- `module.observability.aws_cloudwatch_metric_alarm.this["fire-alert-delivery-failures"]`
+- `module.observability.aws_cloudwatch_metric_alarm.this["iot-publish-auth-errors"]`
+- `module.observability.aws_cloudwatch_metric_alarm.this["iot-rule-sqs-failures"]`
+- `module.observability.aws_cloudwatch_metric_alarm.this["lambda-errors"]`
+- `module.observability.aws_cloudwatch_metric_alarm.this["lambda-throttles"]`
+- `module.observability.aws_cloudwatch_metric_alarm.this["queue-oldest-message-age"]`
+- `module.observability.aws_cloudwatch_metric_alarm.this["telemetry-silence"]`
+- `module.observability.aws_cloudwatch_metric_alarm.this["transient-failures"]`
+- `module.security.aws_kms_alias.pipeline`
+- `module.security.aws_kms_key.pipeline`
+- `module.storage.aws_dynamodb_table.hot`
+- `module.storage.aws_s3_bucket.cold`
+- `module.storage.aws_s3_bucket_lifecycle_configuration.cold`
+- `module.storage.aws_s3_bucket_policy.cold`
+- `module.storage.aws_s3_bucket_public_access_block.cold`
+- `module.storage.aws_s3_bucket_server_side_encryption_configuration.cold`
+- `module.storage.aws_s3_bucket_versioning.cold`
+
+</details>
+
+<details><summary>Unchanged, already deployed (1)</summary>
+
+- `module.budgets.aws_budgets_budget.monthly_cost`
+
+</details>
+
+Addresses and actions only: attribute values are never printed. `demo` is ephemeral (ADR-0002), so while it is destroyed every resource except the always-on budget appears under **Create**.

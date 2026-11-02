@@ -1,0 +1,9 @@
+local (operator credentials, demo.tfvars.example + demo.tfvars):
+| Create | Update | Replace | Destroy | Unchanged |
+|---:|---:|---:|---:|---:|
+| 50 | 0 | 0 | 0 | 1 |
+
+CI (plan role, demo.tfvars.example + secrets), raw/01-green-plan.txt:
+| Create | Update | Replace | Destroy | Unchanged |
+|---:|---:|---:|---:|---:|
+| 50 | 0 | 0 | 0 | 1 |

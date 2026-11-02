@@ -301,6 +301,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   creating an IAM role without the boundary. The CloudTrail record of every
   credential request is included, along with a public-log scan with no
   sensitive values.
+- `.github/workflows/plan.yml`: the required check `plan` runs `terraform plan`
+  of `demo` on every pull request with the read-only OIDC role. Its text
+  output stays on the runner. The job summary lists resource addresses and
+  actions only, with destroys and replaces under a warning. No artifact is
+  uploaded, and a running plan is never cancelled while it holds the state
+  lock. (ADR-0024)
+- `scripts/ci/plan-summary.sh` (summary from the plan JSON, reading only
+  `address` and `change.actions`), `scripts/ci/redact.sh` (account ids and
+  emails removed from error output) and `scripts/tooling/tool-version.sh`
+  (exact-version pin check, shared by `ci.yml` and `plan.yml`).
+- GitHub configuration for the plan: secrets `DEMO_OPS_RECIPIENTS` and
+  `DEMO_FIRE_ALERT_RECIPIENTS`, and the repository variable
+  `DEMO_IOT_FLEET_CLIENT_CSR`.
+- ADR-0024 — Terraform plan in pull requests.
+- `docs/ci-cd.md` section 9: how the plan check works, where its inputs come
+  from, why nothing sensitive reaches the log, and how it was proven.
+- `docs/evidence/ci-c3-2026-11-01/`: evidence of the plan check. It shows the
+  first CI plan equal to the operator's, and an invalid value caught by
+  `plan` while the static checks stayed green. A rename of the always-on
+  budget is flagged as a replace before merge, and a public-log scan finds no
+  sensitive values.
 
 ### Changed
 
@@ -393,8 +414,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/production-readiness.md`: pipeline identity items in section 9 and
   the summary; the state-access item in section 6 reflects the scoped roles.
 - ADR-0023 accepted after the C2 run.
+- **Two input layers (tfvars):** `demo.tfvars.example` and
+  `prod.tfvars.example` are now the committed source of every non-sensitive
+  value. The gitignored `<env>.tfvars` holds only `ops_recipients`,
+  `fire_alert_recipients` and `iot_fleet_client_csr_path`, and overrides the
+  placeholders. `make plan`, `make apply` and `make destroy` pass both files
+  (`ENV=demo` by default). (ADR-0024)
+- Repository ruleset: `plan` added to the required checks.
+- `ci.yml`: the Terraform pin check moved to `scripts/tooling/tool-version.sh`;
+  the error message is unchanged.
+- Root `README.md`: getting started describes the two input layers;
+  `scripts/README.md` lists `tooling/` and `ci/`.
+- ADR-0024 accepted after the C3 run.
 
 ### Fixed
+
+- ADR file names and links: links pointed to names that did not exist, and
+  ADR-0013 had no `.md` extension. Every link to `docs/adr/` now resolves.
 
 - `bootstrap/state-backend`: the justification for disabling S3 access logging
   said CloudTrail records "S3 API calls" on the state bucket. That holds for
