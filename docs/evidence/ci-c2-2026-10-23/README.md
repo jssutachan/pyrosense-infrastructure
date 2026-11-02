@@ -6,7 +6,7 @@ claims. The pipeline gets AWS credentials with **no stored key**. Each role can
 be assumed only from the context it was built for. Every forbidden action,
 including the privilege-escalation path, is **refused by AWS itself**.
 
-Decision record: [ADR-0023](../../adr/0023-pipeline-identity-oidc-and-workload-boundary.md).
+Decision record: [ADR-0023](../../adr/ADR-0023-pipeline-identity-oidc-and-workload-boundary.md).
 
 ---
 

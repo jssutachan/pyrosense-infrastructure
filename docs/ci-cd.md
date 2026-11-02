@@ -8,8 +8,8 @@ repository for the first time.
 | Stage | What it adds | Status |
 |---|---|---|
 | **C1 — Static CI** | The full quality gate runs on every pull request as four required checks | ✅ Done · [evidence](evidence/ci-c1-2026-10-23/README.md) · [ADR-0022](adr/) |
-| **C2 — Pipeline identity** | AWS access for the pipeline through OIDC: no stored keys, a read-only plan role and a scoped apply role that cannot escalate | ✅ Done · [section 8](#8-pipeline-identity-c2) · [evidence](evidence/ci-c2-2026-10-23/README.md) · [ADR-0023](adr/0023-pipeline-identity-oidc-and-workload-boundary.md) |
-| **C3 — Plan in pull requests** | `terraform plan` on every pull request, summarised without sensitive values | 🔄 In progress · [section 9](#9-plan-in-pull-requests-c3) · [ADR-0024](adr/0024-terraform-plan-in-pull-requests.md) |
+| **C2 — Pipeline identity** | AWS access for the pipeline through OIDC: no stored keys, a read-only plan role and a scoped apply role that cannot escalate | ✅ Done · [section 8](#8-pipeline-identity-c2) · [evidence](evidence/ci-c2-2026-10-23/README.md) · [ADR-0023](adr/ADR-0023-pipeline-identity-oidc-and-workload-boundary.md) |
+| **C3 — Plan in pull requests** | `terraform plan` on every pull request, summarised without sensitive values | 🔄 In progress · [section 9](#9-plan-in-pull-requests-c3) · [ADR-0024](adr/ADR-0024-terraform-plan-in-pull-requests.md) |
 | C4 — Manual delivery to `demo` | Deploy and destroy from the pipeline, behind a human approval | ⬜ Planned |
 | C5 — Upkeep | Dependency updates and scheduled drift detection | ⬜ Planned |
 
