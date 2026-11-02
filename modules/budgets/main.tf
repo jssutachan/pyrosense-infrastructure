@@ -7,7 +7,7 @@
 # (actions are the billable feature).
 
 resource "aws_budgets_budget" "monthly_cost" {
-  name         = "${var.name_prefix}-monthly-cost"
+  name         = "${var.name_prefix}-monthly-cost-renamed"
   budget_type  = "COST"
   limit_amount = tostring(var.limit_usd)
   limit_unit   = "USD"
