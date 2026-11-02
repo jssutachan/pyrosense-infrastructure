@@ -6,6 +6,7 @@ This folder holds the proof behind every claim in the repository: what was teste
 |---|---|---|
 | [v1.0-2026-10-15/](v1.0-2026-10-15/results.md) | The whole system on **real AWS**: no message lost, alerts in seconds, failures detected, security controls hold (this page) | 2026-10-15 |
 | [ci-c1-2026-10-23/](ci-c1-2026-10-23/README.md) | The **CI quality gate**: clean code passes, and every one of 15 deliberately broken changes was blocked from merging. Design: [docs/ci-cd.md](../ci-cd.md) | 2026-10-23 |
+| [ci-c2-2026-10-23/](ci-c2-2026-10-23/README.md) | The **pipeline identity**: AWS credentials through OIDC with no stored key, each role only from its own context, and every forbidden action, including privilege escalation, refused by AWS. Design: [docs/ci-cd.md, section 8](../ci-cd.md#8-pipeline-identity-c2) | 2026-10-23 |
 
 The rest of this page covers the end-to-end run.
 

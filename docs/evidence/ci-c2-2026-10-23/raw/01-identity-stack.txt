@@ -1,0 +1,35 @@
+$ terraform -chdir=bootstrap/ci-identity plan -detailed-exitcode
+
+Terraform has compared your real infrastructure against your configuration
+and found no differences, so no changes are needed.
+exit=0   (0 = no changes)
+
+$ terraform -chdir=bootstrap/ci-identity state list
+data.aws_caller_identity.current
+data.aws_iam_policy_document.apply_data
+data.aws_iam_policy_document.apply_iam
+data.aws_iam_policy_document.apply_infra
+data.aws_iam_policy_document.apply_trust
+data.aws_iam_policy_document.plan_trust
+data.aws_iam_policy_document.read
+data.aws_iam_policy_document.state_apply
+data.aws_iam_policy_document.state_plan
+data.aws_iam_policy_document.workload_boundary
+data.aws_partition.current
+aws_iam_openid_connect_provider.github
+aws_iam_policy.apply_data
+aws_iam_policy.apply_iam
+aws_iam_policy.apply_infra
+aws_iam_policy.read
+aws_iam_policy.state_apply
+aws_iam_policy.state_plan
+aws_iam_policy.workload_boundary
+aws_iam_role.apply
+aws_iam_role.plan
+aws_iam_role_policy_attachment.apply["data"]
+aws_iam_role_policy_attachment.apply["iam"]
+aws_iam_role_policy_attachment.apply["infra"]
+aws_iam_role_policy_attachment.apply["read"]
+aws_iam_role_policy_attachment.apply["state"]
+aws_iam_role_policy_attachment.plan["read"]
+aws_iam_role_policy_attachment.plan["state"]

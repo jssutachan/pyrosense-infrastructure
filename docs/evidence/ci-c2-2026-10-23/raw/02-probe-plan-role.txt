@@ -1,0 +1,14 @@
+run: 40015321249 (event pull_request, branch feat/ci-identity)
+job plan-role: success, 11s
+job apply-role: skipped, 0s
+
+Show the claims AWS will check |   "sub": "repo:<OWNER>@<OWNER_ID>/pyrosense-infrastructure@<REPO_ID>:pull_request",
+Show the claims AWS will check |   "aud": "sts.amazonaws.com",
+Show the claims AWS will check |   "repository_id": "<REPO_ID>",
+Show the claims AWS will check |   "repository_owner_id": "<OWNER_ID>",
+Show the claims AWS will check |   "actor_id": "<OWNER_ID>",
+Show the claims AWS will check |   "event_name": "pull_request",
+Show the claims AWS will check |   "environment": null
+Allowed - find the workload boundary by name | pyrosense-workload-boundary
+Refused - create a queue with the plan role | ok: plan role creates a queue -> refused by AWS
+Refused - assume the apply role from a pull request | ok: assume pyrosense-ci-apply-demo from this context -> refused by AWS

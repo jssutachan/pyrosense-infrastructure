@@ -2,7 +2,7 @@
 
 > Serverless, event-driven AWS platform for **early wildfire detection** and **multi-stakeholder alerting**: sensors report, the cloud decides, the right people get alerted in seconds.
 
-**Status:** the v1.0 serverless core is complete. All eight infrastructure modules have been **deployed, tested end to end on real AWS and destroyed**: 15,110 messages processed, **0 lost**, with the evidence published in this repository. CI/CD is in progress: every pull request now runs the full static quality gate as required checks; the Terraform plan and deploy pipeline with OIDC comes next.
+**Status:** the v1.0 serverless core is complete. All eight infrastructure modules have been **deployed, tested end to end on real AWS and destroyed**: 15,110 messages processed, **0 lost**, with the evidence published in this repository. CI/CD is in progress: every pull request runs the full static quality gate as required checks, and the pipeline has an AWS identity through OIDC, with no stored keys, that cannot escalate its own privileges. Terraform plan in pull requests and deployment come next.
 
 | [▶ Test evidence](docs/evidence/README.md) | [CI/CD](docs/ci-cd.md) | [Production readiness](docs/production-readiness.md) | [Design decisions](docs/adr/) |
 |---|---|---|---|
@@ -19,7 +19,7 @@ PyroSense explores how a cloud platform could close that gap: a network of senso
 
 - **Designed for production, deployed for demo.** The architecture is sized for a real fleet of about 500 sensors; the deployment is ephemeral and costs cents. Nothing in the design was simplified because the deployment is small.
 - **Grounded in a real problem.** The scenario, the stakeholders and the failure modes come from the actual 2024 event, which is why the limitations of this design are documented as carefully as its features ([production readiness](docs/production-readiness.md)).
-- **Every non-trivial decision is written down.** 22 Architecture Decision Records state the context, the decision, the alternatives rejected and when to revisit it.
+- **Every non-trivial decision is written down.** 23 Architecture Decision Records state the context, the decision, the alternatives rejected and when to revisit it.
 - **Nothing is claimed without evidence.** Each module was deployed, exercised against real AWS services, verified and destroyed before it was merged; the full system was then tested end to end, including injected failures.
 - **AI-assisted, human-owned.** AI tools drafted parts of the code. Every draft was reviewed against the official AWS and Terraform documentation before it was accepted, and the drafts that were wrong were rejected and the reasons recorded: a private key stored in Terraform state, a device policy that would have denied every real sensor, an alarm configuration that could never fire, among others.
 
@@ -40,6 +40,7 @@ The complete system was deployed from nothing and tested for several hours on AW
 | Monitoring | 10 of 10 alarms delivered their notification · a leftover from a test was caught by the drift check and fixed |
 | Code quality | 95 tests · Terraform validate, TFLint, Trivy and gitleaks clean on the tested commit |
 | CI quality gate | 15 of 15 deliberately broken pull requests blocked from merging, each by the expected check · 0 sensitive values in the public logs ([evidence](docs/evidence/ci-c1-2026-10-23/README.md)) |
+| Pipeline identity (OIDC) | AWS credentials with no stored key, each role only from its own context · 5 of 5 forbidden actions refused by AWS, including creating an IAM role without the permissions boundary · 0 sensitive values in the public logs ([evidence](docs/evidence/ci-c2-2026-10-23/README.md)) |
 
 ![Every boundary of the pipeline agrees during the 502-sensor run](docs/evidence/v1.0-2026-10-15/charts/01-edge-to-storage.png)
 
@@ -115,11 +116,11 @@ The architecture is designed for a production fleet, but deployed ephemerally at
 | Cold storage | Amazon S3: raw archive, SSE-KMS with bucket key, versioning, public access blocked |
 | Alerting | Amazon SNS: separate fire-alert and operations topics, both KMS-encrypted |
 | Observability | Amazon CloudWatch: 10 alarms, log metric filters, embedded metrics (EMF), dashboard |
-| Security | AWS KMS customer-managed key with rotation · least-privilege IAM with KMS conditions · TLS enforced by policy |
+| Security | AWS KMS customer-managed key with rotation · least-privilege IAM with KMS conditions · TLS enforced by policy · pipeline access through OIDC, bounded by a permissions boundary |
 | Cost control | AWS Budgets guardrail · ephemeral deployments |
 | Infrastructure as Code | Terraform ≥ 1.11, 8 modules, remote S3 state with native locking |
 | Quality gate | terraform fmt/validate, TFLint, Trivy, gitleaks, ruff, mypy (strict), pytest + moto (90 % branch-coverage floor), actionlint, pre-commit |
-| CI/CD | GitHub Actions: the full static gate as four required checks; Terraform plan and deploy with OIDC next |
+| CI/CD | GitHub Actions: the full static gate as four required checks · AWS access through OIDC with a read-only plan role and a bounded apply role behind a protected environment · Terraform plan and deploy next |
 
 ---
 
@@ -134,11 +135,13 @@ Every pull request and every push to `develop` and `main` runs four required che
 | `security` | `make sec` | Trivy HIGH/CRITICAL findings, a file Trivy could not parse, a secret anywhere in the git history |
 | `hygiene` | `make guard ci-lint` | a tracked plan, state, tfvars, backend config, CSR or key; a real email address or AWS account id in a committed `*.example` template; actionlint findings in the workflows |
 
-A repository ruleset makes the four checks required on `develop` and `main`, requires a pull request and allows no bypass. CI needs no cloud credentials.
+A repository ruleset makes the four checks required on `develop` and `main`, requires a pull request and allows no bypass. The static gate needs no cloud credentials.
 
 **Pinned toolchain.** Versions live in `.tool-versions` (binaries and Python) and `requirements-dev.txt` (Python packages). CI installs each binary only after checking it against a SHA-256 committed in `scripts/tooling/checksums.txt`, and every third-party action is pinned to a full commit SHA. Trivy uses the checks embedded in the pinned binary, so the same commit always gets the same verdict. `make tools` compares your local toolchain with the pins (ADR-0022).
 
-**Proven, not assumed.** Every gate was tested by a pull request built to fail: 15 of 15 were blocked by the expected check, and testing the gate found and fixed problems in the gate itself. Why the pipeline is built this way, how each part was proven and what it does not cover yet: **[docs/ci-cd.md](docs/ci-cd.md)**.
+**Pipeline identity.** Jobs that call AWS get credentials for one job through OIDC; no access key exists. Pull requests can assume only a read-only plan role. Changes to the `demo` environment need an apply role, available only to a job in a GitHub environment that the maintainer approves. That role can create IAM roles only if they carry a permissions boundary, so it cannot grant itself, or anything it creates, more than the pipeline's data path (`bootstrap/ci-identity`, ADR-0023).
+
+**Proven, not assumed.** Every gate was tested by a pull request built to fail: 15 of 15 were blocked by the expected check, and testing the gate found and fixed problems in the gate itself. The identity was proven the same way: every forbidden action, the escalation path included, was refused by AWS. Why the pipeline is built this way, how each part was proven and what it does not cover yet: **[docs/ci-cd.md](docs/ci-cd.md)**.
 
 ---
 
@@ -154,7 +157,9 @@ A repository ruleset makes the four checks required on `develop` and `main`, req
 ├── trivy.yaml  .tflint.hcl    # scanner and lint configuration (shared by local runs and CI)
 ├── main.tf  variables.tf  outputs.tf  versions.tf  providers.tf   # root: composition only
 ├── demo.tfvars.example  prod.tfvars.example                       # per-environment inputs (real ones are gitignored)
-├── bootstrap/state-backend/   # one-time remote state bucket
+├── bootstrap/
+│   ├── state-backend/         # one-time remote state bucket
+│   └── ci-identity/           # pipeline identity: GitHub OIDC provider, plan and apply roles, workload boundary
 ├── config/                    # backend configuration (example committed)
 ├── modules/                   # one folder per concern, each with its README
 │   ├── budgets/               # account-wide cost guardrail
@@ -168,14 +173,15 @@ A repository ruleset makes the four checks required on `develop` and `main`, req
 ├── src/ingest_lambda/         # Lambda source (Python 3.12, stdlib only)
 ├── tests/                     # pytest suite (moto: no AWS account needed)
 ├── scripts/                   # operator helpers; scripts/iot has the MQTT test publisher
-│   └── tooling/               # hash-verified tool installer, version check, Trivy and gitleaks gates, guard
+│   ├── tooling/               # hash-verified tool installer, version check, Trivy and gitleaks gates, guard
+│   └── ci/                    # helpers used by workflows (OIDC probe)
 ├── docs/
 │   ├── adr/                   # Architecture Decision Records
 │   ├── evidence/              # test evidence: end-to-end run and CI gate (start here)
-│   ├── github/                # repository ruleset, kept as code
+│   ├── github/                # repository ruleset and deployment environment, kept as code
 │   ├── ci-cd.md               # how the pipeline is designed and how it was proven
 │   └── production-readiness.md
-└── .github/workflows/         # CI: four required checks
+└── .github/workflows/         # CI (four required checks) and the OIDC probe
 ```
 
 ---
@@ -222,6 +228,8 @@ terraform apply tfplan
 
 > Re-run `terraform init` whenever a new module block is added to `main.tf`.
 
+> The main configuration reads the workload permissions boundary created by `bootstrap/ci-identity`, so apply that stack once before the first plan (see its README). It also creates the identity the CI/CD pipeline uses.
+
 > Inspect the plan before applying. A green static gate does not prove the plan contains what you expect, so verify the artifact itself:
 >
 > ```bash
@@ -241,7 +249,8 @@ terraform apply tfplan
 | Remote state backend · cost guardrail | ✅ Deployed |
 | Encryption · messaging · storage · alerting · IoT · ingest · observability | ✅ Each verified in its own deploy/destroy cycle |
 | End-to-end evidence run (whole system on AWS) | ✅ [Published](docs/evidence/README.md) |
-| CI/CD: Terraform pipeline with GitHub Actions and OIDC | ⬜ **Next** |
+| CI/CD: pipeline identity (OIDC, plan and apply roles, permissions boundary) | ✅ [Proven](docs/evidence/ci-c2-2026-10-23/README.md) |
+| CI/CD: Terraform plan in pull requests, manual delivery to `demo` | ⬜ **Next** |
 | Production cost model (AWS Pricing Calculator) | ⬜ Planned |
 | Historical analysis (Athena over the S3 archive) | ⬜ Planned |
 | Production hardening | ⬜ See [production readiness](docs/production-readiness.md) |
@@ -276,6 +285,7 @@ Every significant decision is an ADR under [`docs/adr/`](docs/adr/).
 | 0020 | Detection policy: ownership and provisional values |
 | 0021 | Observability: one fault, one page; fleet silence as a breaching heartbeat |
 | 0022 | CI quality gate and pinned, hash-verified toolchain |
+| 0023 | Pipeline identity through OIDC, two roles and a workload permissions boundary |
 
 ---
 

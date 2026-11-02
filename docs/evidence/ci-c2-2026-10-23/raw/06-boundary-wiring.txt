@@ -1,0 +1,4 @@
+IAM roles in the plan of the main configuration and their permissions boundary:
+module.ingest.aws_iam_role.ingest	arn:aws:iam::<ACCOUNT_ID>:policy/pyrosense-workload-boundary
+module.iot.aws_iam_role.errors	arn:aws:iam::<ACCOUNT_ID>:policy/pyrosense-workload-boundary
+module.iot.aws_iam_role.forward	arn:aws:iam::<ACCOUNT_ID>:policy/pyrosense-workload-boundary
