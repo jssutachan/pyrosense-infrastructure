@@ -39,5 +39,5 @@ jq -r --arg env "$env_name" '
     ( if ($unchanged|length) > 0
       then "<details><summary>Unchanged, already deployed (\($unchanged|length))</summary>\n\n" + ($unchanged|bullets) + "\n\n</details>\n"
       else empty end ),
-    "Addresses and actions only: attribute values are never printed. `demo` is ephemeral (ADR-0002), so while it is destroyed every resource except the always-on budget appears under **Create**."
+    "Addresses and actions only: attribute values are never printed. `demo` is ephemeral (ADR-0002), so while it is destroyed every resource appears under **Create**; the always-on budget lives in `bootstrap/finops`."
 ' "$json"

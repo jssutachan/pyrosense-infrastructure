@@ -17,14 +17,9 @@
 
 environment = "prod"
 
-# --- FinOps guardrail (modules/budgets, ADR-0003) -----------------------------
+# The account budget is not here: it lives in bootstrap/finops (ADR-0025).
 
-# Sized for a real deployment: continuous telemetry from a deployed sensor
-# fleet, a permanently retained raw archive in S3 and an on-demand DynamoDB
-# table. This is a monitoring threshold, not a spend commitment.
-budget_limit_usd = 5000
-
-# --- Notification recipients (modules/budgets + modules/alerting, ADR-0014) ---
+# --- Notification recipients (modules/alerting, ADR-0014) ---------------------
 
 # Placeholders. In a real deployment these are institutional distribution lists
 # owned by their teams, not individual mailboxes: alerts must survive staff

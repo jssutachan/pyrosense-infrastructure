@@ -4,6 +4,10 @@
 # Wires infrastructure modules together; declares no resources of its own.
 # Its one data source reads the workload permissions boundary created by
 # bootstrap/ci-identity (ADR-0023).
+#
+# Everything here lives for one demo cycle (ADR-0002). The account budget,
+# the only always-on resource, is in bootstrap/finops (ADR-0025), so a
+# destroy of this configuration never has to leave anything behind.
 # Provider, versions and backend live in providers.tf / versions.tf.
 #
 # Module order below follows the dependency chain: security produces the key
@@ -75,25 +79,6 @@ locals {
 # created.
 data "aws_iam_policy" "workload_boundary" {
   name = "${var.resource_prefix}-workload-boundary"
-}
-
-# ------------------------------------------------------------------------------
-# FinOps guardrail (ADR-0003)
-# ------------------------------------------------------------------------------
-
-# Account-wide monthly cost budget. Deployed first because it protects
-# everything applied after it: it measures gross consumption
-# (include_credit = false), so a runaway resource shows up while free-tier
-# credits still cover the bill.
-module "budgets" {
-  source = "./modules/budgets"
-
-  name_prefix         = local.name_prefix
-  limit_usd           = var.budget_limit_usd
-  notification_emails = values(var.ops_recipients)
-
-  # include_credits, actual_threshold_percents and forecasted_threshold_percent
-  # are omitted on purpose — the module's own defaults cover them.
 }
 
 # ------------------------------------------------------------------------------
