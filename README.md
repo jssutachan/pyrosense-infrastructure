@@ -156,7 +156,7 @@ A repository ruleset makes the four checks required on `develop` and `main`, req
 ├── requirements-dev.txt       # Python dev dependencies, pinned exactly
 ├── trivy.yaml  .tflint.hcl    # scanner and lint configuration (shared by local runs and CI)
 ├── main.tf  variables.tf  outputs.tf  versions.tf  providers.tf   # root: composition only
-├── demo.tfvars.example  prod.tfvars.example                       # per-environment inputs (real ones are gitignored)
+├── demo.tfvars.example  prod.tfvars.example                       # committed non-sensitive inputs per environment (sensitive ones: gitignored <env>.tfvars)
 ├── bootstrap/
 │   ├── state-backend/         # one-time remote state bucket
 │   └── ci-identity/           # pipeline identity: GitHub OIDC provider, plan and apply roles, workload boundary
@@ -174,14 +174,14 @@ A repository ruleset makes the four checks required on `develop` and `main`, req
 ├── tests/                     # pytest suite (moto: no AWS account needed)
 ├── scripts/                   # operator helpers; scripts/iot has the MQTT test publisher
 │   ├── tooling/               # hash-verified tool installer, version check, Trivy and gitleaks gates, guard
-│   └── ci/                    # helpers used by workflows (OIDC probe)
+│   └── ci/                    # helpers used by workflows: OIDC probe, plan summary, log redaction
 ├── docs/
 │   ├── adr/                   # Architecture Decision Records
 │   ├── evidence/              # test evidence: end-to-end run and CI gate (start here)
 │   ├── github/                # repository ruleset and deployment environment, kept as code
 │   ├── ci-cd.md               # how the pipeline is designed and how it was proven
 │   └── production-readiness.md
-└── .github/workflows/         # CI (four required checks) and the OIDC probe
+└── .github/workflows/         # CI (four required checks), Terraform plan (required) and the OIDC probe
 ```
 
 ---
@@ -213,14 +213,14 @@ The full toolchain setup (linters, scanners, version check, hooks) is in [docs/c
 **Deploy** (creates billable resources; destroy them when you are done):
 
 1. Create the state bucket once with `bootstrap/state-backend` (see its README) and write `config/backend.hcl` from the example.
-2. Copy `demo.tfvars.example` to `demo.tfvars` and set your own email recipients.
+2. Create `demo.tfvars` with only the sensitive values: `ops_recipients`, `fire_alert_recipients` and `iot_fleet_client_csr_path`. Every other value comes from the committed `demo.tfvars.example`, which is passed first and overridden by `demo.tfvars` (two input layers, ADR-0024).
 3. Generate the device key pair and certificate request locally; the private key never enters Terraform (see `modules/iot/README.md`).
 4. Then:
 
 ```bash
 terraform init -backend-config=config/backend.hcl
 make check                                         # the full static quality gate
-terraform plan -var-file=demo.tfvars -out=tfplan
+terraform plan -var-file=demo.tfvars.example -var-file=demo.tfvars -out=tfplan   # or: make plan
 terraform apply tfplan
 ```
 

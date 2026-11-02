@@ -1,0 +1,140 @@
+# Terraform plan of the demo environment on every pull request (C3, ADR-0024).
+#
+# Read-only by construction: the job assumes pyrosense-ci-plan
+# (bootstrap/ci-identity), which can read project configuration and the main
+# state and take the state lock, and nothing else (ADR-0023).
+#
+# `plan` is a required status check (docs/github/ruleset-protected-branches.json).
+# No `paths:` filter, for the reason CI has none: a filtered-out required
+# check never reports and blocks the pull request (ADR-0022). The job is
+# skipped, which GitHub counts as success, only where no OIDC token can exist:
+# pull requests from forks and from Dependabot.
+#
+# What reaches the public log: resource addresses and actions, built from the
+# plan's JSON. Never the plan's text output (ARNs carry the account id) and
+# never the plan file (it holds sensitive values in clear text). Nothing is
+# uploaded as an artifact.
+
+name: Terraform plan
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+# Never cancel a running plan: it holds the state lock, and a cancelled job
+# leaves the lock file behind. A newer push to the same pull request waits.
+concurrency:
+  group: plan-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "1"
+  TF_INPUT: "0"
+  AWS_REGION: us-east-1
+  TF_ENV: demo
+
+jobs:
+  plan:
+    name: plan
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository
+      && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # request the OIDC token; grants nothing in AWS by itself
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read the pinned Terraform version
+        id: pins
+        run: |
+          version="$(scripts/tooling/tool-version.sh terraform)"
+          echo "terraform=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ steps.pins.outputs.terraform }}
+          terraform_wrapper: false
+
+      - name: Assume the plan role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: plan-${{ github.run_id }}
+          role-duration-seconds: 1800
+          mask-aws-account-id: true
+
+      # Layer 2 of the plan inputs (layer 1 is the committed
+      # demo.tfvars.example). Recipients are secrets: email addresses are PII.
+      # The CSR is public material (a public key and a name), so it is a
+      # variable; it lives outside the repository only because the guard
+      # refuses tracked *.csr files.
+      - name: Build the sensitive input layer
+        env:
+          OPS_RECIPIENTS: ${{ secrets.DEMO_OPS_RECIPIENTS }}
+          FIRE_ALERT_RECIPIENTS: ${{ secrets.DEMO_FIRE_ALERT_RECIPIENTS }}
+          FLEET_CLIENT_CSR: ${{ vars.DEMO_IOT_FLEET_CLIENT_CSR }}
+        run: |
+          for name in OPS_RECIPIENTS FIRE_ALERT_RECIPIENTS FLEET_CLIENT_CSR; do
+            [[ -n "${!name}" ]] || { echo "::error::${name} is empty: see docs/ci-cd.md section 9.6"; exit 1; }
+          done
+          printf '%s\n' "$FLEET_CLIENT_CSR" > "$RUNNER_TEMP/fleet-client.csr"
+          jq -n \
+            --argjson ops "$OPS_RECIPIENTS" \
+            --argjson fire "$FIRE_ALERT_RECIPIENTS" \
+            --arg csr "$RUNNER_TEMP/fleet-client.csr" \
+            '{ops_recipients: $ops, fire_alert_recipients: $fire, iot_fleet_client_csr_path: $csr}' \
+            > "$RUNNER_TEMP/sensitive.tfvars.json"
+
+      # Same backend settings as an operator (config/backend.hcl.example);
+      # only the bucket name, which carries the account id, is computed here.
+      - name: Initialise with the remote state
+        run: |
+          bucket="pyrosense-tfstate-$(aws sts get-caller-identity --query Account --output text)"
+          if ! terraform init -input=false -lockfile=readonly \
+               -backend-config=config/backend.hcl.example \
+               -backend-config="bucket=${bucket}" > "$RUNNER_TEMP/init.log" 2>&1; then
+            scripts/ci/redact.sh < "$RUNNER_TEMP/init.log" | tail -n 40
+            exit 1
+          fi
+          echo "initialised"
+
+      # -detailed-exitcode: 0 no changes, 1 error, 2 changes. The text output
+      # goes to a file; only an error is shown, through the redaction filter.
+      - name: Plan
+        run: |
+          set +e
+          terraform plan -input=false -lock-timeout=5m -detailed-exitcode \
+            -var-file="${TF_ENV}.tfvars.example" \
+            -var-file="$RUNNER_TEMP/sensitive.tfvars.json" \
+            -out="$RUNNER_TEMP/tfplan" > "$RUNNER_TEMP/plan.log" 2>&1
+          status=$?
+          set -e
+          case "$status" in
+            0) echo "plan: no changes" ;;
+            2) echo "plan: changes present (see the job summary)" ;;
+            *) echo "::error::terraform plan failed (exit ${status})"
+               scripts/ci/redact.sh < "$RUNNER_TEMP/plan.log" | tail -n 60
+               exit 1 ;;
+          esac
+
+      - name: Summarise the plan
+        run: |
+          terraform show -json "$RUNNER_TEMP/tfplan" > "$RUNNER_TEMP/plan.json"
+          scripts/ci/plan-summary.sh "$RUNNER_TEMP/plan.json" "$TF_ENV" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # The runner is discarded after the job; deleting first means a later
+      # step added by mistake cannot pick these files up.
+      - name: Remove the plan and the sensitive inputs
+        if: always()
+        run: rm -f "$RUNNER_TEMP"/tfplan "$RUNNER_TEMP"/plan.json "$RUNNER_TEMP"/plan.log "$RUNNER_TEMP"/init.log "$RUNNER_TEMP"/sensitive.tfvars.json "$RUNNER_TEMP"/fleet-client.csr

@@ -1,10 +1,12 @@
 # ==============================================================================
 # Root input contract.
 #
-# Values arrive from demo.tfvars / prod.tfvars (both gitignored; only the
-# .example templates are committed). Per ADR-0002, this contract is the entire
-# demo/production delta: the code is written once for production, and only the
-# values below change between environments.
+# Values arrive in two layers (ADR-0024): the committed <env>.tfvars.example
+# with every non-sensitive value, then the sensitive layer (recipients and the
+# CSR path) from a gitignored <env>.tfvars locally or from GitHub secrets in
+# CI. Per ADR-0002, this contract is the entire demo/production delta: the
+# code is written once for production, and only the values below change
+# between environments.
 #
 # Anything identical in both environments belongs as a module default, not here.
 # ==============================================================================

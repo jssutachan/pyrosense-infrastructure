@@ -9,7 +9,7 @@ repository for the first time.
 |---|---|---|
 | **C1 — Static CI** | The full quality gate runs on every pull request as four required checks | ✅ Done · [evidence](evidence/ci-c1-2026-10-23/README.md) · [ADR-0022](adr/) |
 | **C2 — Pipeline identity** | AWS access for the pipeline through OIDC: no stored keys, a read-only plan role and a scoped apply role that cannot escalate | ✅ Done · [section 8](#8-pipeline-identity-c2) · [evidence](evidence/ci-c2-2026-10-23/README.md) · [ADR-0023](adr/0023-pipeline-identity-oidc-and-workload-boundary.md) |
-| C3 — Plan in pull requests | `terraform plan` on every pull request, summarised without sensitive values | ⬜ Next |
+| **C3 — Plan in pull requests** | `terraform plan` on every pull request, summarised without sensitive values | 🔄 In progress · [section 9](#9-plan-in-pull-requests-c3) · [ADR-0024](adr/0024-terraform-plan-in-pull-requests.md) |
 | C4 — Manual delivery to `demo` | Deploy and destroy from the pipeline, behind a human approval | ⬜ Planned |
 | C5 — Upkeep | Dependency updates and scheduled drift detection | ⬜ Planned |
 
@@ -485,3 +485,111 @@ Raw results: [docs/evidence/ci-c2-2026-10-23/](evidence/ci-c2-2026-10-23/README.
   is added when the deploy workflow exists (C4).
 - **One maintainer.** The environment's required reviewer is the same person
   who triggers the run (production readiness, section 9).
+
+---
+
+## 9. Plan in pull requests (C3)
+
+C1 checks that a change is well written; C2 gave the pipeline a read-only
+way into AWS. C3 uses that access so every pull request shows **what the
+change would do to AWS**, before anyone merges it. The decision record is
+ADR-0024; the workflow is
+[`.github/workflows/plan.yml`](../.github/workflows/plan.yml).
+
+### 9.1 What a reviewer gets
+
+The required check `plan` runs `terraform plan` against `demo` and writes a
+summary on the run page. It shows only resource addresses and actions:
+
+```text
+Terraform plan: demo
+| Create | Update | Replace | Destroy | Unchanged |
+|     50 |      0 |       0 |       0 |         1 |
+No existing resource is destroyed or replaced.
+▸ Created (50)            module.security.aws_kms_key.pipeline, ...
+▸ Unchanged, already deployed (1)   module.budgets.aws_budgets_budget.monthly
+```
+
+Any destroy or replace is listed first, under a warning. Because `demo` is
+ephemeral (ADR-0002), most plans show the stack as "create". The plan is
+still worth running on every change, for three reasons:
+- it evaluates what the static gate cannot: data sources, preconditions with
+  real values, and the plan role's permissions;
+- it proves that the always-on budget is untouched;
+- it shows any destroy before the merge, not during an apply.
+
+### 9.2 How the job runs
+
+```mermaid
+flowchart LR
+    PR["Pull request"] --> J["job: plan<br/>(id-token: write)"]
+    J -->|"OIDC"| R["pyrosense-ci-plan<br/>read + state lock"]
+    J --> L1["layer 1: demo.tfvars.example<br/>(committed)"]
+    J --> L2["layer 2: secrets + CSR variable<br/>(built at run time)"]
+    R & L1 & L2 --> P["terraform plan<br/>text output → file only"]
+    P --> S["plan-summary.sh<br/>addresses + actions"]
+    S --> SUM["job summary + log"]
+    P -. "error only" .-> RED["redact.sh → log"]
+```
+
+### 9.3 Where the plan's inputs come from
+
+Two layers. A later `-var-file` overrides an earlier one:
+
+| Layer | File | Holds | Locally | In CI |
+|---|---|---|---|---|
+| 1 | `demo.tfvars.example` (committed) | every non-sensitive value: environment, budget, KMS window, `allow_data_destruction` | `make plan` passes it first | passed first |
+| 2 | sensitive layer | `ops_recipients`, `fire_alert_recipients`, `iot_fleet_client_csr_path` | gitignored `demo.tfvars`, with only these three | a JSON file built from two secrets and one variable, deleted at the end of the job |
+
+The committed file is the single source of every value a reader can see.
+CI and the operator cannot disagree on the budget or the KMS window, because
+both read the same file. Only what is actually sensitive lives outside the
+repository. The recipients matter even when `demo` is destroyed: the budget,
+which is always on, notifies them.
+
+The fleet client's CSR is a **variable, not a secret**: it holds a public key
+and a name. The private key never leaves the operator's machine (ADR-0017).
+
+### 9.4 Nothing sensitive in the public log
+
+| Output | Where it goes | Why |
+|---|---|---|
+| `terraform init` and `plan` text | a file on the runner; on error, the last lines through `scripts/ci/redact.sh` | the text prints ARNs (account id) and the IoT endpoint |
+| Plan JSON | read by `scripts/ci/plan-summary.sh`, which takes `address` and `change.actions` only, then deleted | the JSON holds every value in clear text; sensitive ones are only flagged, not removed |
+| Plan file | deleted at the end of the job; **never** uploaded | it holds the recipients in clear text, and artifacts of a public repository are downloadable by anyone signed in |
+| Account id | masked by the credentials action, and replaced again by `redact.sh` | two independent layers |
+
+The plan in a pull request is informational. The deploy job (C4) plans again
+after approval and applies that plan.
+
+### 9.5 How it fits the gate
+
+- **Required check, no path filter.** A required check that a `paths:` filter
+  skips never reports, and the pull request stays blocked (ADR-0022).
+- **Skipped where no token can exist.** Pull requests from forks and from
+  Dependabot get no secrets and no OIDC token, and the plan role trusts only
+  the maintainer's runs. The job is skipped there with `if:`, and GitHub
+  counts a job skipped by a condition as a success.
+- **A running plan is never cancelled.** It holds the state lock, and a
+  cancelled job leaves the lock file in S3. Pushes to the same pull request
+  queue. Plans of different pull requests wait up to five minutes for the
+  lock.
+
+### 9.6 Configuration
+
+| Setting | Kind | Value |
+|---|---|---|
+| `DEMO_OPS_RECIPIENTS` | repository secret | JSON object `{"<label>": "<email>"}`; the labels must match `demo.tfvars.example` |
+| `DEMO_FIRE_ALERT_RECIPIENTS` | repository secret | same shape |
+| `DEMO_IOT_FLEET_CLIENT_CSR` | repository variable | the PEM CSR of the demo fleet client |
+| `AWS_PLAN_ROLE_ARN` | repository secret | from C2 |
+| Ruleset | [`docs/github/ruleset-protected-branches.json`](github/ruleset-protected-branches.json) | `plan` added to the required checks |
+
+**Changing a recipient** means updating the local `demo.tfvars` and the
+secret together. **Rotating the fleet client key** means regenerating the
+key and CSR (`modules/iot/README.md`), then updating the local path and the
+variable.
+
+### 9.7 How it is proven
+
+Results and evidence are added when C3 closes.
