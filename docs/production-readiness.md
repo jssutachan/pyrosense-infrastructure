@@ -190,6 +190,20 @@ The quality gate runs on every pull request as required checks, with a pinned, h
 - **Today:** IoT certificate actions cover the whole account and region, because certificates have random ids and cannot be tagged through Terraform. KMS keys are scoped by tag, and the apply role could tag another key of the account into scope.
 - **What production needs:** a dedicated account per environment makes both scopes equal to the project. In a shared account, deny `kms:TagResource` on keys outside the project.
 
+### 🟠 The plan in a pull request is a summary, not a reviewed artifact
+- **Today:** every pull request runs `terraform plan` against `demo` and
+  shows resource addresses and actions (ADR-0024). The plan file is
+  discarded, because it holds sensitive values in clear text and artifacts
+  of a public repository are downloadable by anyone signed in. `demo` is
+  usually destroyed, so most plans show the whole stack as "create".
+- **What production needs:**
+  - A long-lived environment, where the plan shows the real diff of every
+    change.
+  - The reviewed plan applied as-is, with the plan file kept in an encrypted,
+    access-controlled store (HCP Terraform, or S3 with a KMS key), so what is
+    approved is exactly what is applied.
+  - A plan per environment, with drift checks between deploys.
+
 ### 🟠 Only direct Python dependencies are locked
 - **Today:** `requirements-dev.txt` pins each direct dependency exactly; the packages they pull in are resolved at install time.
 - **What production needs:** a full lock with hashes (`uv lock` or `pip-compile --generate-hashes`), installed with `--require-hashes`, so CI and every developer install byte-identical packages.
@@ -230,4 +244,4 @@ The quality gate runs on every pull request as required checks, with a pinned, h
 | Security | — | DynamoDB TLS policy · scoped key use for the IoT role · state encrypted with the managed key and its reads audited · account guardrails |
 | Operations | Automated deployment and recovery (CI/CD) · scheduled drift detection | On-call and ownership · scheduled fault injection |
 | Availability | — | Recovery objectives and a second-region design if needed |
-| Delivery pipeline | Independent review of every change (two maintainers, required approvals, code owners) | No IAM writes from the production pipeline · one account per environment · locked transitive dependencies · update bot with cooldown · secret rotation procedure · plan check for a private repository |
+| Delivery pipeline | Independent review of every change (two maintainers, required approvals, code owners) | Reviewed plan applied as-is from an encrypted store · No IAM writes from the production pipeline · one account per environment · locked transitive dependencies · update bot with cooldown · secret rotation procedure · plan check for a private repository |

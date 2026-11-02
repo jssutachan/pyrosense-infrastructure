@@ -1,0 +1,2 @@
+enforcement: active
+required checks: python, terraform, security, hygiene, plan

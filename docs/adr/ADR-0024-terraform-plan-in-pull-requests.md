@@ -1,8 +1,9 @@
 # ADR-0024: Terraform plan in pull requests
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-01, after the C3 run)
 - **Date:** 2026-11-01
 - **Stage:** CI/CD, sub-stage C3 (plan in pull requests)
+- **Evidence:** [docs/evidence/ci-c3-2026-11-01/](../evidence/ci-c3-2026-11-01/README.md)
 
 ## Context
 
@@ -130,6 +131,18 @@ lock for up to five minutes (`-lock-timeout=5m`).
 - A pull request from a fork or from Dependabot merges without a plan. The
   plan of the next maintainer pull request, or the scheduled drift check of
   C5, covers it.
+
+## Validation
+
+Proven on 2026-11-01:
+- **The first CI plan matched the operator's plan exactly.** Both reported
+  50 create and the budget unchanged, and the plan role needed no extra
+  permission.
+- **An invalid value in the committed inputs failed `plan`** and blocked the
+  merge, while the static checks stayed green.
+- **Renaming the always-on budget was flagged** as a replace at the top of the
+  summary.
+- **The plan-run logs are clean:** no account id and no email in 1,589 lines.
 
 ## Revisit if
 

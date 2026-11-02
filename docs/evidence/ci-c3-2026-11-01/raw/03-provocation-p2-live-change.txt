@@ -1,0 +1,21 @@
+pull request #27 (closed without merging), checks:
+  hygiene	pass
+  plan	pass
+  plan-role	pass
+  python	pass
+  security	pass
+  terraform	pass
+  apply-role	skipping
+
+run: 41378749962
+job plan: success, 25s
+
+### Terraform plan: `demo`
+
+| Create | Update | Replace | Destroy | Unchanged |
+|---:|---:|---:|---:|---:|
+| 50 | 0 | 1 | 0 | 0 |
+
+> [!WARNING]
+> This change destroys or replaces existing resources:
+> - `module.budgets.aws_budgets_budget.monthly_cost (replace)`

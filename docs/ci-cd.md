@@ -9,8 +9,8 @@ repository for the first time.
 |---|---|---|
 | **C1 — Static CI** | The full quality gate runs on every pull request as four required checks | ✅ Done · [evidence](evidence/ci-c1-2026-10-23/README.md) · [ADR-0022](adr/) |
 | **C2 — Pipeline identity** | AWS access for the pipeline through OIDC: no stored keys, a read-only plan role and a scoped apply role that cannot escalate | ✅ Done · [section 8](#8-pipeline-identity-c2) · [evidence](evidence/ci-c2-2026-10-23/README.md) · [ADR-0023](adr/ADR-0023-pipeline-identity-oidc-and-workload-boundary.md) |
-| **C3 — Plan in pull requests** | `terraform plan` on every pull request, summarised without sensitive values | 🔄 In progress · [section 9](#9-plan-in-pull-requests-c3) · [ADR-0024](adr/ADR-0024-terraform-plan-in-pull-requests.md) |
-| C4 — Manual delivery to `demo` | Deploy and destroy from the pipeline, behind a human approval | ⬜ Planned |
+| **C3 — Plan in pull requests** | `terraform plan` on every pull request, summarised without sensitive values | ✅ Done · [section 9](#9-plan-in-pull-requests-c3) · [evidence](evidence/ci-c3-2026-11-01/README.md) · [ADR-0024](adr/ADR-0024-terraform-plan-in-pull-requests.md) |
+| C4 — Manual delivery to `demo` | Deploy and destroy from the pipeline, behind a human approval | ⬜ Next |
 | C5 — Upkeep | Dependency updates and scheduled drift detection | ⬜ Planned |
 
 PyroSense follows **continuous delivery, not continuous deployment**: every
@@ -592,4 +592,34 @@ variable.
 
 ### 9.7 How it is proven
 
-Results and evidence are added when C3 closes.
+| Test | Expected | Result |
+|---|---|---|
+| First plan in CI vs the operator's local plan, both with two layers | the same summary | ✅ both 50 create · 1 unchanged (the budget); no extra permission needed by the plan role |
+| **P1:** `kms_deletion_window_days = 3` in the committed inputs | `plan` red, the four static checks green, merge blocked | ✅ `Invalid value for variable … between 7 and 30`; `terraform validate` cannot see it because it does not read tfvars |
+| **P2:** the always-on budget renamed | `plan` green, the change flagged before merge | ✅ `Replace: 1` under a warning: renaming a budget replaces it |
+| Public logs of the plan runs | no account id, no email | ✅ 0 and 0 in 1,589 lines |
+| Ruleset | `plan` required | ✅ five required checks |
+
+Raw results: [docs/evidence/ci-c3-2026-11-01/](evidence/ci-c3-2026-11-01/README.md).
+
+### 9.8 What proving it found
+
+| Found | Outcome |
+|---|---|
+| The plan check passes on a change that replaces the only live resource | **By design:** the plan informs, it does not approve. The warning is at the top of the summary, and the decision to apply is the approval in C4 |
+| The fleet client's key and CSR were lost with a laptop reinstall | **Regenerated**; the key is backed up off the machine and the CSR lives in a GitHub variable as well |
+| Terraform's coloured output made failure logs hard to read | **Fixed:** `-no-color` on `init` and `plan` |
+| A merge attempted right after a push was refused | **Correct:** the ruleset requires the checks of the latest commit |
+
+### 9.9 Known limitations
+
+- **Most plans show the whole stack as "create".** `demo` is ephemeral, so
+  the plan proves that a change can be planned against real AWS and leaves
+  the budget intact; it does not show a diff against a running environment.
+- **Pull requests from forks and Dependabot merge without a plan.** They get
+  no OIDC token. The next maintainer pull request, or the scheduled drift
+  check (C5), covers them.
+- **The summary lists addresses, not attribute changes.** A reviewer who
+  needs the details runs `make plan` locally.
+- **Recipients live in two places**, the local `demo.tfvars` and two GitHub
+  secrets, and must be changed together.

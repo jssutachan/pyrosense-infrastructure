@@ -2,7 +2,7 @@
 
 > Serverless, event-driven AWS platform for **early wildfire detection** and **multi-stakeholder alerting**: sensors report, the cloud decides, the right people get alerted in seconds.
 
-**Status:** the v1.0 serverless core is complete. All eight infrastructure modules have been **deployed, tested end to end on real AWS and destroyed**: 15,110 messages processed, **0 lost**, with the evidence published in this repository. CI/CD is in progress: every pull request runs the full static quality gate as required checks, and the pipeline has an AWS identity through OIDC, with no stored keys, that cannot escalate its own privileges. Terraform plan in pull requests and deployment come next.
+**Status:** the v1.0 serverless core is complete. All eight infrastructure modules have been **deployed, tested end to end on real AWS and destroyed**: 15,110 messages processed, **0 lost**, with the evidence published in this repository. CI/CD is in progress: every pull request runs the full static quality gate and a real `terraform plan` against AWS as required checks, using an AWS identity through OIDC, with no stored keys, that cannot escalate its own privileges. Manual, approved deployment to the demo environment comes next.
 
 | [▶ Test evidence](docs/evidence/README.md) | [CI/CD](docs/ci-cd.md) | [Production readiness](docs/production-readiness.md) | [Design decisions](docs/adr/) |
 |---|---|---|---|
@@ -19,7 +19,7 @@ PyroSense explores how a cloud platform could close that gap: a network of senso
 
 - **Designed for production, deployed for demo.** The architecture is sized for a real fleet of about 500 sensors; the deployment is ephemeral and costs cents. Nothing in the design was simplified because the deployment is small.
 - **Grounded in a real problem.** The scenario, the stakeholders and the failure modes come from the actual 2024 event, which is why the limitations of this design are documented as carefully as its features ([production readiness](docs/production-readiness.md)).
-- **Every non-trivial decision is written down.** 23 Architecture Decision Records state the context, the decision, the alternatives rejected and when to revisit it.
+- **Every non-trivial decision is written down.** 24 Architecture Decision Records state the context, the decision, the alternatives rejected and when to revisit it.
 - **Nothing is claimed without evidence.** Each module was deployed, exercised against real AWS services, verified and destroyed before it was merged; the full system was then tested end to end, including injected failures.
 - **AI-assisted, human-owned.** AI tools drafted parts of the code. Every draft was reviewed against the official AWS and Terraform documentation before it was accepted, and the drafts that were wrong were rejected and the reasons recorded: a private key stored in Terraform state, a device policy that would have denied every real sensor, an alarm configuration that could never fire, among others.
 
@@ -40,6 +40,7 @@ The complete system was deployed from nothing and tested for several hours on AW
 | Monitoring | 10 of 10 alarms delivered their notification · a leftover from a test was caught by the drift check and fixed |
 | Code quality | 95 tests · Terraform validate, TFLint, Trivy and gitleaks clean on the tested commit |
 | CI quality gate | 15 of 15 deliberately broken pull requests blocked from merging, each by the expected check · 0 sensitive values in the public logs ([evidence](docs/evidence/ci-c1-2026-10-23/README.md)) |
+| Terraform plan in pull requests | every pull request planned against real AWS with a read-only role · an invalid value caught that the static gate cannot see · a change to the always-on budget flagged before merge · 0 sensitive values in the public logs ([evidence](docs/evidence/ci-c3-2026-11-01/README.md)) |
 | Pipeline identity (OIDC) | AWS credentials with no stored key, each role only from its own context · 5 of 5 forbidden actions refused by AWS, including creating an IAM role without the permissions boundary · 0 sensitive values in the public logs ([evidence](docs/evidence/ci-c2-2026-10-23/README.md)) |
 
 ![Every boundary of the pipeline agrees during the 502-sensor run](docs/evidence/v1.0-2026-10-15/charts/01-edge-to-storage.png)
@@ -120,7 +121,7 @@ The architecture is designed for a production fleet, but deployed ephemerally at
 | Cost control | AWS Budgets guardrail · ephemeral deployments |
 | Infrastructure as Code | Terraform ≥ 1.11, 8 modules, remote S3 state with native locking |
 | Quality gate | terraform fmt/validate, TFLint, Trivy, gitleaks, ruff, mypy (strict), pytest + moto (90 % branch-coverage floor), actionlint, pre-commit |
-| CI/CD | GitHub Actions: the full static gate as four required checks · AWS access through OIDC with a read-only plan role and a bounded apply role behind a protected environment · Terraform plan and deploy next |
+| CI/CD | GitHub Actions: the full static gate as four required checks · `terraform plan` on every pull request as a fifth · AWS access through OIDC with a read-only plan role and a bounded apply role behind a protected environment · approved deploy next |
 
 ---
 
@@ -135,7 +136,9 @@ Every pull request and every push to `develop` and `main` runs four required che
 | `security` | `make sec` | Trivy HIGH/CRITICAL findings, a file Trivy could not parse, a secret anywhere in the git history |
 | `hygiene` | `make guard ci-lint` | a tracked plan, state, tfvars, backend config, CSR or key; a real email address or AWS account id in a committed `*.example` template; actionlint findings in the workflows |
 
-A repository ruleset makes the four checks required on `develop` and `main`, requires a pull request and allows no bypass. The static gate needs no cloud credentials.
+A repository ruleset makes these four checks and `plan` required on `develop` and `main`, requires a pull request and allows no bypass. The static gate needs no cloud credentials.
+
+**Plan in every pull request.** The required check `plan` runs `terraform plan` of the demo environment with the read-only role, and writes a summary of resource addresses and actions, never values. Non-sensitive inputs come from the committed `demo.tfvars.example`; the recipients and the device CSR come from GitHub secrets and a variable. The plan file is never uploaded: it holds sensitive values in clear text (ADR-0024).
 
 **Pinned toolchain.** Versions live in `.tool-versions` (binaries and Python) and `requirements-dev.txt` (Python packages). CI installs each binary only after checking it against a SHA-256 committed in `scripts/tooling/checksums.txt`, and every third-party action is pinned to a full commit SHA. Trivy uses the checks embedded in the pinned binary, so the same commit always gets the same verdict. `make tools` compares your local toolchain with the pins (ADR-0022).
 
@@ -250,7 +253,8 @@ terraform apply tfplan
 | Encryption · messaging · storage · alerting · IoT · ingest · observability | ✅ Each verified in its own deploy/destroy cycle |
 | End-to-end evidence run (whole system on AWS) | ✅ [Published](docs/evidence/README.md) |
 | CI/CD: pipeline identity (OIDC, plan and apply roles, permissions boundary) | ✅ [Proven](docs/evidence/ci-c2-2026-10-23/README.md) |
-| CI/CD: Terraform plan in pull requests, manual delivery to `demo` | ⬜ **Next** |
+| CI/CD: Terraform plan in every pull request (required check) | ✅ [Proven](docs/evidence/ci-c3-2026-11-01/README.md) |
+| CI/CD: manual, approved delivery to `demo` | ⬜ **Next** |
 | Production cost model (AWS Pricing Calculator) | ⬜ Planned |
 | Historical analysis (Athena over the S3 archive) | ⬜ Planned |
 | Production hardening | ⬜ See [production readiness](docs/production-readiness.md) |
@@ -286,6 +290,7 @@ Every significant decision is an ADR under [`docs/adr/`](docs/adr/).
 | 0021 | Observability: one fault, one page; fleet silence as a breaching heartbeat |
 | 0022 | CI quality gate and pinned, hash-verified toolchain |
 | 0023 | Pipeline identity through OIDC, two roles and a workload permissions boundary |
+| 0024 | Terraform plan in pull requests, with committed non-sensitive inputs and injected secrets |
 
 ---
 
