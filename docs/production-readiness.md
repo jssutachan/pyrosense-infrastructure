@@ -131,7 +131,7 @@ The design guarantees that **no message is lost**. It does not yet guarantee tha
 ### 🟠 Remaining hardening items
 - **DynamoDB:** add a TLS-only resource policy (the queue, bucket and topics already have one).
 - **IoT rule role:** restrict its use of the encryption key to requests made through SQS, as the consumer's role already does.
-- **Terraform state:** it holds subscriber email addresses in plain text, protected by S3 server-side encryption only. Use the customer-managed key, and restrict who can read the state.
+- **Terraform state:** it holds subscriber email addresses in plain text, protected by S3 server-side encryption only. The two pipeline roles can read it; IAM limits them to the state object and its lock (ADR-0023). Nothing records who read it: object reads are CloudTrail data events, and the account has no trail. Use the customer-managed key, add a trail with S3 data events for the state bucket, and restrict reads with a bucket policy as well.
 - **Account level:** CloudTrail organization trail, GuardDuty and Security Hub with alerts. They are outside this project's scope, but a production account needs them.
 
 ### 🟢 Verified today
@@ -168,7 +168,7 @@ Already verified: least-privilege IAM (no wildcards; IAM Access Analyzer clean),
 
 ## 9. Delivery pipeline (CI/CD)
 
-The quality gate runs on every pull request as required checks, with a pinned, hash-verified toolchain (ADR-0022). These are the parts a team deploying this for real would still have to add.
+The quality gate runs on every pull request as required checks, with a pinned, hash-verified toolchain (ADR-0022). The pipeline obtains AWS credentials through OIDC, with a read-only plan role and an apply role that cannot escalate (ADR-0023). These are the parts a team deploying this for real would still have to add.
 
 ### 🔴 One person writes, reviews and merges every change
 - **Today:** the project has a single maintainer. The ruleset requires a pull request and green checks, but zero approvals, because nobody can approve their own pull request.
@@ -177,6 +177,18 @@ The quality gate runs on every pull request as required checks, with a pinned, h
   - At least two people with write access, and at least one required approval on the ruleset, with stale approvals dismissed on new pushes.
   - Code owners for the sensitive paths (IAM, the key policy, the detection policy, the workflows).
   - "Prevent self-review" on the deployment environments, so the person who triggers a deploy cannot also approve it.
+
+### 🟠 The pipeline still writes IAM, within a boundary
+- **Today:** the apply role creates the workload roles and their policies. A permissions boundary caps what those roles can ever do, and the role cannot create a role without it (proven in the [C2 evidence](evidence/ci-c2-2026-10-23/README.md)). The demo environment lives in the same account as everything else.
+- **Why it is a problem:** the boundary limits the damage; it does not remove the capability. A mistake in the boundary itself would apply to every role the pipeline creates.
+- **What production needs:**
+  - The workload roles created in a separately applied stack, so the production pipeline needs no IAM write at all and only passes existing roles.
+  - The apply role restricted to the deploy workflow file (`job_workflow_ref` in the trust policy).
+  - One AWS account per environment (AWS Organizations), so a demo pipeline can never reach production resources even by mistake.
+
+### 🟢 Two scopes are wider than the project
+- **Today:** IoT certificate actions cover the whole account and region, because certificates have random ids and cannot be tagged through Terraform. KMS keys are scoped by tag, and the apply role could tag another key of the account into scope.
+- **What production needs:** a dedicated account per environment makes both scopes equal to the project. In a shared account, deny `kms:TagResource` on keys outside the project.
 
 ### 🟠 Only direct Python dependencies are locked
 - **Today:** `requirements-dev.txt` pins each direct dependency exactly; the packages they pull in are resolved at install time.
@@ -215,7 +227,7 @@ The quality gate runs on every pull request as required checks, with a pinned, h
 | Sensors | Per-device identity and revocation · per-sensor liveness | Load test with per-device connections · reboot-safe sequence numbers |
 | Detection | Expert-owned, calibrated thresholds with multi-sensor correlation | — |
 | Capacity | — | Concurrency and quotas sized from targets |
-| Security | — | DynamoDB TLS policy · scoped key use for the IoT role · state encrypted with the managed key · account guardrails |
+| Security | — | DynamoDB TLS policy · scoped key use for the IoT role · state encrypted with the managed key and its reads audited · account guardrails |
 | Operations | Automated deployment and recovery (CI/CD) · scheduled drift detection | On-call and ownership · scheduled fault injection |
 | Availability | — | Recovery objectives and a second-region design if needed |
-| Delivery pipeline | Independent review of every change (two maintainers, required approvals, code owners) | Locked transitive dependencies · update bot with cooldown · secret rotation procedure · plan check for a private repository |
+| Delivery pipeline | Independent review of every change (two maintainers, required approvals, code owners) | No IAM writes from the production pipeline · one account per environment · locked transitive dependencies · update bot with cooldown · secret rotation procedure · plan check for a private repository |

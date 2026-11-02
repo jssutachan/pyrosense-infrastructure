@@ -1,0 +1,18 @@
+run: 40023016836 (event workflow_dispatch, branch main)
+job apply-role: success, 27s
+job plan-role: skipped, 0s
+
+approval recorded by GitHub before the job started:
+  state=approved environments=demo by=<OWNER>
+
+Show the claims AWS will check |   "sub": "repo:<OWNER>@<OWNER_ID>/pyrosense-infrastructure@<REPO_ID>:environment:demo",
+Show the claims AWS will check |   "aud": "sts.amazonaws.com",
+Show the claims AWS will check |   "repository_id": "<REPO_ID>",
+Show the claims AWS will check |   "repository_owner_id": "<OWNER_ID>",
+Show the claims AWS will check |   "actor_id": "<OWNER_ID>",
+Show the claims AWS will check |   "event_name": "workflow_dispatch",
+Show the claims AWS will check |   "environment": "demo"
+Allowed - find the workload boundary by name | pyrosense-workload-boundary
+Refused - create a role without the workload boundary | ok: apply role creates an unbounded role -> refused by AWS
+Refused - create a resource of another environment | ok: apply role creates a prod queue -> refused by AWS
+Refused - change the pipeline's own role | ok: apply role tags its own role -> refused by AWS

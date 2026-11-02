@@ -1,0 +1,28 @@
+{
+  "can_admins_bypass": false,
+  "deployment_branch_policy": {
+    "custom_branch_policies": true,
+    "protected_branches": false
+  },
+  "name": "demo",
+  "protection_rules": [
+    {
+      "prevent_self_review": false,
+      "reviewers": [
+        "<OWNER>"
+      ],
+      "type": "required_reviewers"
+    },
+    {
+      "prevent_self_review": null,
+      "reviewers": [],
+      "type": "branch_policy"
+    }
+  ],
+  "deployment_branches": [
+    {
+      "name": "main",
+      "type": "branch"
+    }
+  ]
+}

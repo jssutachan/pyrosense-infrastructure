@@ -8,8 +8,8 @@ repository for the first time.
 | Stage | What it adds | Status |
 |---|---|---|
 | **C1 — Static CI** | The full quality gate runs on every pull request as four required checks | ✅ Done · [evidence](evidence/ci-c1-2026-10-23/README.md) · [ADR-0022](adr/) |
-| **C2 — Pipeline identity** | AWS access for the pipeline through OIDC: no stored keys, a read-only plan role and a scoped apply role that cannot escalate | 🔄 In progress · [section 8](#8-pipeline-identity-c2) · [ADR-0023](adr/0023-pipeline-identity-oidc-and-workload-boundary.md) |
-| C3 — Plan in pull requests | `terraform plan` on every pull request, summarised without sensitive values | ⬜ Planned |
+| **C2 — Pipeline identity** | AWS access for the pipeline through OIDC: no stored keys, a read-only plan role and a scoped apply role that cannot escalate | ✅ Done · [section 8](#8-pipeline-identity-c2) · [evidence](evidence/ci-c2-2026-10-23/README.md) · [ADR-0023](adr/0023-pipeline-identity-oidc-and-workload-boundary.md) |
+| C3 — Plan in pull requests | `terraform plan` on every pull request, summarised without sensitive values | ⬜ Next |
 | C4 — Manual delivery to `demo` | Deploy and destroy from the pipeline, behind a human approval | ⬜ Planned |
 | C5 — Upkeep | Dependency updates and scheduled drift detection | ⬜ Planned |
 
@@ -57,7 +57,8 @@ protects `develop` and `main`:
 - force pushes and branch deletion are blocked;
 - the bypass list is empty, so the repository owner cannot skip it either.
 
-C1 needs **no cloud credentials**: the gate is static and runs offline from AWS.
+The static gate needs **no cloud credentials** and runs offline from AWS. The
+jobs that do call AWS get short-lived credentials through OIDC (section 8).
 
 ---
 
@@ -284,6 +285,11 @@ targets, so the same command reproduces the failure locally.
 **If a secret is ever pushed:** rotate it first. Deleting the commit does not
 un-publish it.
 
+**Changing what the pipeline may do in AWS:** the roles, their permissions and
+the workload boundary live in `bootstrap/ci-identity` and are applied by the
+operator, never by the pipeline. Its [README](../bootstrap/ci-identity/README.md)
+says how to add a missing action without widening the scope.
+
 ---
 
 ## 8. Pipeline identity (C2)
@@ -420,19 +426,62 @@ is created.
 |---|---|---|
 | Repository secret `AWS_PLAN_ROLE_ARN` | output `plan_role_arn` | an ARN contains the account id; a non-secret `with:` input is printed in the public log |
 | Environment `demo` → required reviewer | the maintainer | nothing deploys without a person deciding it |
-| Environment `demo` → deployment branches | the default branch | changes reach AWS only after review and merge |
+| Environment `demo` → deployment branches | `main` only | changes reach AWS only after review and merge |
+| Environment `demo` → administrator bypass | off | the approval is not optional, not even for the repository owner |
 | Environment `demo` → secret `AWS_APPLY_ROLE_ARN` | output `apply_role_arn` | unavailable to a job until the reviewer approves |
+
+The environment is kept as code in
+[docs/github/environment-demo.json](github/environment-demo.json), like the
+ruleset. The order matters: a workflow that names an environment that does not
+exist yet makes GitHub create it **without any protection**, so the
+environment is configured before the first run that uses it.
 
 ### 8.8 How it is proven
 
 [`.github/workflows/oidc-probe.yml`](../.github/workflows/oidc-probe.yml) gets
 real credentials and creates nothing. For each role it shows the claims AWS
-evaluated and the role it became, then asserts that forbidden actions are
-**refused by AWS**:
+evaluated and the role it became. Then it asserts that the forbidden actions
+are **refused by AWS**: an authorization error passes, while a success or any
+other error fails the job.
 
-| Job | Must be allowed | Must be refused |
-|---|---|---|
-| `plan-role` (pull requests touching the identity) | assume the plan role; find the boundary by name | create a queue; assume the apply role from a pull request |
-| `apply-role` (manual, environment `demo`) | assume the apply role; find the boundary by name | create a role **without** the boundary; create a `pyrosense-prod-*` resource; tag the pipeline's own role |
+| Job | Allowed | Refused by AWS | Result |
+|---|---|---|---|
+| `plan-role` (pull requests touching the identity) | assume the plan role; find the boundary by name | create a queue; assume the apply role from a pull request | ✅ 2 of 2 refused |
+| `apply-role` (manual, environment `demo`, approved) | assume the apply role; find the boundary by name | create a role **without** the boundary; create a `pyrosense-prod-*` resource; tag the pipeline's own role | ✅ 3 of 3 refused |
 
-Results and evidence: added when C2 closes.
+More proof:
+- **CloudTrail recorded 5 credential requests that day.** 3 were accepted: two
+  plan-role requests from pull requests and the approved apply-role request.
+  The other 2 were refused: the apply role, requested from pull requests.
+- **The `sub` claims use the immutable format** in pull requests and
+  environments. GitHub documents that format only for branches.
+- **The three workload roles** carry the boundary in a plan of the main
+  configuration.
+- **The public logs show 0 account ids and 0 emails** across 795 lines.
+
+Raw results: [docs/evidence/ci-c2-2026-10-23/](evidence/ci-c2-2026-10-23/README.md).
+
+### 8.9 What proving it found
+
+| Found | Outcome |
+|---|---|
+| `backend.hcl` was ignored only under `config/`; the new stack's copy, which holds the account id, appeared as untracked | **Fixed:** ignored in every folder |
+| New GitHub environments allow administrator bypass by default | **Fixed:** bypass off, kept in `docs/github/environment-demo.json` |
+| CloudTrail's list of calls is not a permission list (API names differ from IAM actions; implicit permissions and data events are missing) | **By design:** list translated and completed by hand; C3 and C4 exercise it for real |
+| The state bucket's logging suppression claimed CloudTrail recorded its object access | **Corrected:** object reads and writes are data events, not recorded without a trail; production needs one |
+| The main configuration reads the IoT CSR from a file on the operator's machine | **Open for C3:** the plan job must receive the CSR, which is public material, some other way |
+
+### 8.10 Known limitations of the identity
+
+- **Certificates are scoped to the account, not the project.** IoT
+  certificates have random ids and cannot be tagged through Terraform, so the
+  apply role's certificate actions cover the whole account and region.
+- **Tag-based scoping of KMS keys.** The apply role could tag another
+  customer managed key of the account into scope. Today every CMK in the
+  account belongs to PyroSense.
+- **Object access to state is not audited.** There is no trail with S3 data
+  events.
+- **The apply role is not yet pinned to a workflow file.** `job_workflow_ref`
+  is added when the deploy workflow exists (C4).
+- **One maintainer.** The environment's required reviewer is the same person
+  who triggers the run (production readiness, section 9).

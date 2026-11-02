@@ -1,8 +1,9 @@
 # ADR-0023: Pipeline identity through OIDC, two roles and a workload boundary
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-10-23, after the C2 run)
 - **Date:** 2026-10-23
 - **Stage:** CI/CD, sub-stage C2 (pipeline identity)
+- **Evidence:** [docs/evidence/ci-c2-2026-10-23/](../evidence/ci-c2-2026-10-23/README.md)
 
 ## Context
 
@@ -170,6 +171,20 @@ line, added with its reason, never a wildcard.
   - Object reads and writes on the state bucket are not audited (no trail;
     see the re-evaluated `AVD-AWS-0089` note in `bootstrap/state-backend`).
 - `docs/ci-cd.md` section 8 explains the design for a first-time reader.
+
+## Validation
+
+Proven on 2026-10-23 with the OIDC probe workflow:
+- **Credentials.** Both roles were assumed from their own context. The apply
+  role was refused from a pull request.
+- **The trust policies match the real claims.** The immutable `sub` format
+  holds in pull requests and environments.
+- **The escalation path is closed.** The apply role was refused when it tried
+  to create a role without the boundary, a resource of another environment,
+  and a change to its own role.
+- **CloudTrail agrees.** It recorded the same 3 accepted and 2 refused
+  requests.
+- **The public logs are clean.** They hold no account id and no email.
 
 ## Revisit if
 
