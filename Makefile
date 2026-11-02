@@ -13,6 +13,16 @@
 SHELL       := bash
 .SHELLFLAGS := -euo pipefail -c
 
+# Plan inputs come in two layers (ADR-0024); a later -var-file overrides an
+# earlier one:
+#   1. $(ENV).tfvars.example  committed: every non-sensitive value
+#   2. $(ENV).tfvars          gitignored: recipients and the CSR path only
+# CI (.github/workflows/plan.yml) uses the same layer 1 and builds layer 2
+# from GitHub secrets, so a pull request plans what the operator plans.
+ENV            ?= demo
+VARFILES       := -var-file=$(ENV).tfvars.example -var-file=$(ENV).tfvars
+
+# Values the Trivy scan evaluates (CI passes the committed template).
 TFVARS         ?= demo.tfvars
 BACKEND_CONFIG := config/backend.hcl
 
@@ -144,14 +154,14 @@ check: guard fmt-check validate lint sec ci-lint py-lint py-type py-test ## Run 
 tf-init: ## Initialise Terraform with the remote backend
 	terraform init -backend-config=$(BACKEND_CONFIG)
 
-plan: ## Show the execution plan (TFVARS=prod.tfvars for the cost model)
-	terraform plan -var-file=$(TFVARS)
+plan: ## Show the execution plan (ENV=prod for the cost model)
+	terraform plan $(VARFILES)
 
 apply: ## Apply the configuration
-	terraform apply -var-file=$(TFVARS)
+	terraform apply $(VARFILES)
 
 destroy: ## Destroy all managed infrastructure
-	terraform destroy -var-file=$(TFVARS)
+	terraform destroy $(VARFILES)
 
 clean: ## Remove local Terraform and Python caches
 	rm -rf .terraform/ .pytest_cache/ .ruff_cache/ .mypy_cache/

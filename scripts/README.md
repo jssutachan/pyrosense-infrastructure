@@ -1,6 +1,7 @@
 # scripts/
 
-Helpers for verifying a deployment, one folder per module. None of them
+Helpers for verifying a deployment (one folder per module), plus the tooling
+of the quality gate and the pipeline (`tooling/`, `ci/`). None of them
 changes infrastructure: `budget-check.jq` only reads a saved plan,
 `sns-confirm.sh` only confirms a subscription you were already going to
 confirm by hand, and `mqtt_smoke_publisher.py` only publishes test telemetry
@@ -19,8 +20,20 @@ Terraform state** — the script only receives its path.
 | `alerting/` | `sns-confirm.sh` | A confirmation link on stdin | One subscription ARN | `RUNTIME-alerting.md` step 6 |
 | `iot/` | `mqtt_smoke_publisher.py` | `PYROSENSE_*` settings (env file outside the repo) | Topic, `seq` and PUBACK latency per message; a summary | `RUNBOOK-iot.md` F1 and F7 (R5, R6) |
 | `iot/` | `known-payload.json` | — (published with `aws iot-data publish`) | — | `RUNBOOK-iot.md` F7 (R4) |
+| `tooling/` | `install-tool.sh` | `.tool-versions`, `checksums.txt` | Download and checksum result | `make` targets, CI jobs |
+| `tooling/` | `check-tool-versions.sh` | `.tool-versions`, installed binaries | `ok` / `MISMATCH` per tool | `make tools` |
+| `tooling/` | `tool-version.sh` | `.tool-versions` | One exact version, or an error | `ci.yml`, `plan.yml` |
+| `tooling/` | `trivy-gate.sh`, `gitleaks-gate.sh`, `guard.sh` | Terraform source, git history, tracked files | Findings as file:line, never the value | `make sec`, `make guard` |
+| `ci/` | `oidc-probe.sh` | An OIDC token from the job | Token claims; whether AWS refused an action | `oidc-probe.yml` |
+| `ci/` | `plan-summary.sh` | Plan JSON (`terraform show -json`) | Resource addresses and actions only | `plan.yml` |
+| `ci/` | `redact.sh` | Any text on stdin | The same text without account ids or emails | `plan.yml` |
 
-Each folder has its own README with usage, rationale and known limitations:
+`tooling/` and `ci/` serve the quality gate and the pipeline; why they exist
+and how they were proven is in [`docs/ci-cd.md`](../docs/ci-cd.md). The
+`plan-summary.sh` rule is the same as #11 above: the plan JSON holds every
+value in clear text, so the script reads only addresses and actions.
+
+The module folders have their own README with usage, rationale and known limitations:
 
 - [`budgets/README.md`](budgets/README.md) — why the check compares values
   instead of asking whether the plan is a no-op, and why the sensitivity

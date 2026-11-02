@@ -1,12 +1,14 @@
 # ==============================================================================
-# prod.tfvars — design target. NEVER APPLIED.
+# prod.tfvars.example — COMMITTED. Production design target. NEVER APPLIED.
 #
-# GITIGNORED, for symmetry with demo.tfvars; it holds no real secrets.
+# Same two layers as demo.tfvars.example (ADR-0024): this file holds the
+# non-sensitive values; recipients and the CSR path are placeholders that a
+# gitignored prod.tfvars would override.
 #
-# Per ADR-0002, this file exists so the production intent behind each value is
-# auditable at a glance: the diff between this file and demo.tfvars IS the
+# Per ADR-0002, the production intent behind each value is auditable at a
+# glance: the diff between this file and demo.tfvars.example IS the
 # demo/production delta, and that diff is part of what the portfolio
-# demonstrates. It is never passed to apply.
+# demonstrates. No pipeline plans or applies it.
 # ==============================================================================
 
 # Omitted on purpose — these use their defaults in variables.tf:

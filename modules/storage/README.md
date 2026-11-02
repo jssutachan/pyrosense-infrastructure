@@ -1,7 +1,7 @@
 # modules/storage
 
 Hot/cold persistence for the PyroSense ingest pipeline. Design record:
-[ADR-0013](../../docs/adr/ADR-0013-storage-key-design-and-flat-cold-archive.md).
+[ADR-0013](../../docs/adr/ADR-0013-Storage-single-table-key-design-and-a-flat-non-tiered-cold-archive.md).
 
 | Store | Resource | Question it answers | Lifetime |
 |---|---|---|---|

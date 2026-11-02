@@ -4,7 +4,7 @@ The AWS identity of the CI/CD pipeline: a GitHub OIDC identity provider, a
 read-only **plan** role, an **apply** role limited to `pyrosense-demo-*`, and
 the **workload permissions boundary** every pipeline-created role must carry.
 
-Why it is built this way: [ADR-0023](../../docs/adr/0023-pipeline-identity-oidc-and-workload-boundary.md)
+Why it is built this way: [ADR-0023](../../docs/adr/ADR-0023-pipeline-identity-oidc-and-workload-boundary.md)
 and [docs/ci-cd.md, section 8](../../docs/ci-cd.md#8-pipeline-identity-c2).
 
 | File | Contents |
