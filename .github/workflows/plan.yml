@@ -101,7 +101,7 @@ jobs:
       - name: Initialise with the remote state
         run: |
           bucket="pyrosense-tfstate-$(aws sts get-caller-identity --query Account --output text)"
-          if ! terraform init -input=false -lockfile=readonly \
+          if ! terraform init -input=false -no-color -lockfile=readonly \
                -backend-config=config/backend.hcl.example \
                -backend-config="bucket=${bucket}" > "$RUNNER_TEMP/init.log" 2>&1; then
             scripts/ci/redact.sh < "$RUNNER_TEMP/init.log" | tail -n 40
@@ -114,7 +114,7 @@ jobs:
       - name: Plan
         run: |
           set +e
-          terraform plan -input=false -lock-timeout=5m -detailed-exitcode \
+          terraform plan -input=false -no-color -lock-timeout=5m -detailed-exitcode \
             -var-file="${TF_ENV}.tfvars.example" \
             -var-file="$RUNNER_TEMP/sensitive.tfvars.json" \
             -out="$RUNNER_TEMP/tfplan" > "$RUNNER_TEMP/plan.log" 2>&1
