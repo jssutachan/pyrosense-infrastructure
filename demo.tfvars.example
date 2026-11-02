@@ -65,7 +65,7 @@ fire_alert_recipients = {
 # AWS minimum (valid range 7-30). The demo is torn down after each validation
 # cycle, and a key pending deletion incurs no charge, so the shortest window
 # keeps teardown clean. Production uses 30 — see prod.tfvars.
-kms_deletion_window_days = 7
+kms_deletion_window_days = 3
 
 
 # --- Data lifecycle (modules/storage, ADR-0013) -------------------------------
