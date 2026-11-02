@@ -30,17 +30,9 @@
 # Drives resource naming (local.name_prefix) and the provider's default_tags.
 environment = "demo"
 
-# --- FinOps guardrail (modules/budgets, ADR-0003) -----------------------------
+# The account budget is not here: it lives in bootstrap/finops (ADR-0025).
 
-# Account-wide monthly ceiling. $2 is deliberately tight: the deployment model
-# is turn on, demonstrate, destroy, so sustained spend means something was left
-# running. Credits are excluded (include_credit = false), so this measures gross
-# consumption and still fires while free-tier credits cover the bill.
-# Note: a KMS key left alive for a full month is $1 — half this ceiling, enough
-# to trip the 80% ACTUAL threshold. That is the guardrail working, not a bug.
-budget_limit_usd = 2
-
-# --- Notification recipients (modules/budgets + modules/alerting, ADR-0014) ---
+# --- Notification recipients (modules/alerting, ADR-0014) ---------------------
 
 # Maps of { label = email }. The label is what shows up in plans and resource
 # addresses; the address never does.

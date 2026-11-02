@@ -10,20 +10,6 @@
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
-# module.budgets (ADR-0003)
-# ------------------------------------------------------------------------------
-
-output "budget_arn" {
-  description = "ARN of the account monthly cost budget."
-  value       = module.budgets.budget_arn
-}
-
-output "budget_name" {
-  description = "Name of the account-wide monthly budget."
-  value       = module.budgets.budget_name
-}
-
-# ------------------------------------------------------------------------------
 # module.security (ADR-0010)
 # ------------------------------------------------------------------------------
 

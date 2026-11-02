@@ -51,17 +51,8 @@ variable "resource_prefix" {
 }
 
 # ------------------------------------------------------------------------------
-# FinOps guardrail — consumed by module.budgets (ADR-0003)
-# ------------------------------------------------------------------------------
-
-variable "budget_limit_usd" {
-  description = "Monthly account cost budget in USD. Set per environment in tfvars."
-  type        = number
-}
-
-# ------------------------------------------------------------------------------
-# Notification recipients — consumed by module.budgets and module.alerting
-# (ADR-0003, ADR-0014)
+# Notification recipients — consumed by module.alerting (ADR-0014). The
+# account budget has its own copy in bootstrap/finops (ADR-0025).
 #
 # Maps of { label = email }, not lists of addresses. Terraform always discloses
 # for_each keys in resource addresses, so alerting keys its subscriptions by

@@ -414,6 +414,7 @@ applied by the operator:
 |---|---|---|---|
 | `bootstrap/state-backend` | local (cannot store its own state) | operator | permanent |
 | `bootstrap/ci-identity` | state bucket, own key, unreadable by the pipeline roles | operator | permanent |
+| `bootstrap/finops` | state bucket, `bootstrap/finops/terraform.tfstate`, unreadable by the pipeline roles | operator | permanent: the account budget (ADR-0025) |
 | main configuration | state bucket, `pyrosense/terraform.tfstate` | operator today; the pipeline from C4 | `demo`: one test cycle |
 
 The main configuration reads the boundary by name. If `bootstrap/ci-identity`
@@ -504,18 +505,21 @@ summary on the run page. It shows only resource addresses and actions:
 ```text
 Terraform plan: demo
 | Create | Update | Replace | Destroy | Unchanged |
-|     50 |      0 |       0 |       0 |         1 |
+|     50 |      0 |       0 |       0 |         0 |
 No existing resource is destroyed or replaced.
 ▸ Created (50)            module.security.aws_kms_key.pipeline, ...
-▸ Unchanged, already deployed (1)   module.budgets.aws_budgets_budget.monthly
 ```
+
+Until C4 the summary also showed the budget as `Unchanged (1)`. The budget
+now lives in its own stack (section 8.6), so between cycles the main state is
+empty.
 
 Any destroy or replace is listed first, under a warning. Because `demo` is
 ephemeral (ADR-0002), most plans show the stack as "create". The plan is
 still worth running on every change, for three reasons:
 - it evaluates what the static gate cannot: data sources, preconditions with
   real values, and the plan role's permissions;
-- it proves that the always-on budget is untouched;
+- it proves that nothing outside the ephemeral environment is in its state;
 - it shows any destroy before the merge, not during an apply.
 
 ### 9.2 How the job runs
@@ -538,14 +542,14 @@ Two layers. A later `-var-file` overrides an earlier one:
 
 | Layer | File | Holds | Locally | In CI |
 |---|---|---|---|---|
-| 1 | `demo.tfvars.example` (committed) | every non-sensitive value: environment, budget, KMS window, `allow_data_destruction` | `make plan` passes it first | passed first |
+| 1 | `demo.tfvars.example` (committed) | every non-sensitive value: environment, KMS window, `allow_data_destruction` | `make plan` passes it first | passed first |
 | 2 | sensitive layer | `ops_recipients`, `fire_alert_recipients`, `iot_fleet_client_csr_path` | gitignored `demo.tfvars`, with only these three | a JSON file built from two secrets and one variable, deleted at the end of the job |
 
 The committed file is the single source of every value a reader can see.
-CI and the operator cannot disagree on the budget or the KMS window, because
-both read the same file. Only what is actually sensitive lives outside the
-repository. The recipients matter even when `demo` is destroyed: the budget,
-which is always on, notifies them.
+CI and the operator cannot disagree on the KMS window or the data-destruction
+switch, because both read the same file. Only what is actually sensitive lives
+outside the repository. The budget's own recipients are set in
+`bootstrap/finops`, which the pipeline never reads.
 
 The fleet client's CSR is a **variable, not a secret**: it holds a public key
 and a name. The private key never leaves the operator's machine (ADR-0017).
@@ -614,8 +618,8 @@ Raw results: [docs/evidence/ci-c3-2026-11-01/](evidence/ci-c3-2026-11-01/README.
 ### 9.9 Known limitations
 
 - **Most plans show the whole stack as "create".** `demo` is ephemeral, so
-  the plan proves that a change can be planned against real AWS and leaves
-  the budget intact; it does not show a diff against a running environment.
+  the plan proves that a change can be planned against real AWS; it does not
+  show a diff against a running environment.
 - **Pull requests from forks and Dependabot merge without a plan.** They get
   no OIDC token. The next maintainer pull request, or the scheduled drift
   check (C5), covers them.

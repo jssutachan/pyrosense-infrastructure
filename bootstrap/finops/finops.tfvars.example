@@ -1,0 +1,16 @@
+# finops.tfvars.example — COMMITTED template. Copy to finops.tfvars
+# (gitignored) and replace the placeholder with the real address.
+#
+# The label must match the main configuration's ops_recipients label, so the
+# same person is the operator in both stacks.
+ops_recipients = {
+  "operator" = "you@example.org"
+}
+
+# Uses the default in variables.tf:
+#   budget_limit_usd -> 2
+#
+# A production account sets its own ceiling here. The production sizing
+# (continuous telemetry, a permanently retained archive, on-demand DynamoDB)
+# was modelled at 5000 USD/month: a monitoring threshold, not a spend
+# commitment.
