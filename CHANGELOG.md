@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `bootstrap/finops`: the account budget in its own operator-applied stack, imported from the main configuration, so the main state holds only the ephemeral `demo` environment. (ADR-0025)
+- `.github/workflows/deploy.yml`: manual delivery of `demo` (`apply` / `destroy`) from `main` behind the `demo` environment approval. The plan is shown before the approval; the apply role plans again and applies only if the plan fingerprint matches; convergence check, control-plane smoke test, pre-destroy drift report and empty-state check. (ADR-0025)
+- `scripts/ci/plan_guard.py`: plan fingerprint and policy gate. `apply` refuses deletes and replaces (except tainted resources) and recreating a resource the refresh lost; `destroy` allows deletes only; unknown actions fail closed.
+- `scripts/ci/smoke-demo.sh` (post-apply control-plane checks) and `scripts/ci/sensitive-tfvars.sh` (one definition of the sensitive plan inputs for every workflow).
 - Repository scaffolding: directory structure, editor configuration and license.
 - Terraform version contract pinning Terraform >= 1.11 and the AWS provider 6.x.
 - Quality gate: TFLint with the AWS and Terraform rulesets, Trivy for
@@ -325,6 +329,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Pipeline roles trust deliveries only from `deploy.yml` on `main` (`job_workflow_ref`); the `apply-role` probe job moved into every delivery.
+- The plan summary names the changed attribute paths of in-place updates, never their values.
+- The main configuration no longer contains the budget: `budget_limit_usd` and the budget outputs moved to `bootstrap/finops`.
 - Re-enabled the `terraform_unused_required_providers` TFLint rule now that
   the root module declares an `aws_*` resource.
 - Tag-linting strategy: replaced `aws_resource_missing_tags` with
@@ -429,6 +436,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Pipeline permissions found by the first deliveries: the key half of KMS alias calls, event source mapping tags on create, `HeadBucket` on `demo` buckets for the plan role, and decryption of the function configuration through Lambda for the plan role. Budget reads removed from both roles.
 - ADR file names and links: links pointed to names that did not exist, and
   ADR-0013 had no `.md` extension. Every link to `docs/adr/` now resolves.
 

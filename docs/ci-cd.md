@@ -10,7 +10,7 @@ repository for the first time.
 | **C1 — Static CI** | The full quality gate runs on every pull request as four required checks | ✅ Done · [evidence](evidence/ci-c1-2026-10-23/README.md) · [ADR-0022](adr/) |
 | **C2 — Pipeline identity** | AWS access for the pipeline through OIDC: no stored keys, a read-only plan role and a scoped apply role that cannot escalate | ✅ Done · [section 8](#8-pipeline-identity-c2) · [evidence](evidence/ci-c2-2026-10-23/README.md) · [ADR-0023](adr/ADR-0023-pipeline-identity-oidc-and-workload-boundary.md) |
 | **C3 — Plan in pull requests** | `terraform plan` on every pull request, summarised without sensitive values | ✅ Done · [section 9](#9-plan-in-pull-requests-c3) · [evidence](evidence/ci-c3-2026-11-01/README.md) · [ADR-0024](adr/ADR-0024-terraform-plan-in-pull-requests.md) |
-| **C4 — Manual delivery to `demo`** | Deploy and destroy from the pipeline, behind a human approval | 🔄 In progress · [section 10](#10-manual-delivery-to-demo-c4) · [ADR-0025](adr/ADR-0025-manual-delivery-to-demo.md) |
+| **C4 — Manual delivery to `demo`** | Deploy and destroy from the pipeline, behind a human approval | ✅ Done · [section 10](#10-manual-delivery-to-demo-c4) · [evidence](evidence/ci-c4-2026-11-03/README.md) · [ADR-0025](adr/ADR-0025-manual-delivery-to-demo.md) |
 | C5 — Upkeep | Dependency updates and scheduled drift detection | ⬜ Planned |
 
 PyroSense follows **continuous delivery, not continuous deployment**: every
@@ -270,7 +270,9 @@ machine where the package manager updates it, hold that version.
 **Before opening a pull request:** run `make check`. CI runs the same targets.
 
 **Merging:** open a pull request to `develop`. Direct pushes are rejected. When
-the four checks are green, merge with a merge commit.
+the five required checks are green, merge with a merge commit.
+
+**Delivering to `demo`:** from `main`, with a human approval (section 10.8).
 
 **When a check fails:** open the failed job. Each check maps to `make`
 targets, so the same command reproduces the failure locally.
@@ -403,7 +405,8 @@ across 12 services**. That list was necessary but not sufficient:
 
 It is a first version. C3 runs every read for real and C4 every write; an
 `AccessDenied` there is a missing line, added with its reason, never a
-wildcard.
+wildcard. C4 found four, two of them reads that only a live environment could
+show (section 10.10).
 
 ### 8.6 Where the identity lives
 
@@ -502,7 +505,8 @@ ADR-0024; the workflow is
 ### 9.1 What a reviewer gets
 
 The required check `plan` runs `terraform plan` against `demo` and writes a
-summary on the run page. It shows only resource addresses and actions:
+summary on the run page. It shows resource addresses and actions and, for an
+in-place update, the paths of the changed attributes, never their values:
 
 ```text
 Terraform plan: demo
@@ -561,7 +565,7 @@ and a name. The private key never leaves the operator's machine (ADR-0017).
 | Output | Where it goes | Why |
 |---|---|---|
 | `terraform init` and `plan` text | a file on the runner; on error, the last lines through `scripts/ci/redact.sh` | the text prints ARNs (account id) and the IoT endpoint |
-| Plan JSON | read by `scripts/ci/plan-summary.sh`, which takes `address` and `change.actions` only, then deleted | the JSON holds every value in clear text; sensitive ones are only flagged, not removed |
+| Plan JSON | read by `scripts/ci/plan-summary.sh`, which prints `address`, `change.actions` and, for in-place updates, the paths of the changed attributes (values are compared in memory, never printed), then deleted | the JSON holds every value in clear text; sensitive ones are only flagged, not removed |
 | Plan file | deleted at the end of the job; **never** uploaded | it holds the recipients in clear text, and artifacts of a public repository are downloadable by anyone signed in |
 | Account id | masked by the credentials action, and replaced again by `redact.sh` | two independent layers |
 
@@ -625,8 +629,8 @@ Raw results: [docs/evidence/ci-c3-2026-11-01/](evidence/ci-c3-2026-11-01/README.
 - **Pull requests from forks and Dependabot merge without a plan.** They get
   no OIDC token. The next maintainer pull request, or the scheduled drift
   check (C5), covers them.
-- **The summary lists addresses, not attribute changes.** A reviewer who
-  needs the details runs `make plan` locally.
+- **The summary names changed attributes, not their values.** A reviewer
+  who needs the values runs `make plan` locally.
 - **Recipients live in two places**, the local `demo.tfvars` and two GitHub
   secrets, and must be changed together.
 
@@ -746,3 +750,68 @@ sensitive output, and the workflow never reads it.
 
 A failed `apply` leaves part of `demo` deployed. Dispatch `apply` again to
 continue, or `destroy` to remove it.
+
+### 10.9 How it is proven
+
+Every row was run on AWS on 2026-11-03, from the pipeline, by the maintainer.
+
+| Test | Expected | Result |
+|---|---|---|
+| The old `apply-role` probe job, on `main`, approved in `demo`, after the trust was pinned to `deploy.yml` | its `sub`, `ref` and `environment` all match the trust policy; AWS still refuses it | ✅ `Not authorized to perform sts:AssumeRoleWithWebIdentity` |
+| Budget moved to `bootstrap/finops` (import, then `state rm` from the main state) | nothing created or destroyed | ✅ `1 to import, 0 to add, 1 to change (tags), 0 to destroy`; the next pull request planned `50 create, 0 unchanged` |
+| First pipeline apply: the apply role writes for the first time | any missing permission fails loudly | ✅ 2 `AccessDenied` (section 10.10), fixed without wildcards |
+| A plan that would replace five live bucket resources | refused before anyone is asked to approve | ✅ `plan_guard: … delete/create is not allowed in apply`; `deliver` never started |
+| A plan that differed from the operator's plan of the same state | the reviewer does not approve it | ✅ rejected with the reason, diagnosed with CloudTrail, fixed |
+| Final apply | the plan the reviewer read is the plan applied, and it converges | ✅ `2 create, 48 unchanged`, identical to the operator's local plan · fingerprint matched · `converged: no changes after apply` · 13 of 13 smoke checks |
+| Escalation checks before every delivery | AWS refuses all three | ✅ 3 of 3 refused, on every apply and destroy |
+| End to end with the certificate the pipeline issued (operator) | data reaches every store and the alert reaches the mailbox | ✅ 7 messages · 6 invocations, 0 errors · 8 hot items · 7 archived objects · DLQ empty · fire alert received |
+| Destroy | the main state is empty; the budget is not touched | ✅ 50 destroyed · 0 resources in state · 0 alarms · 0 functions · budget alive in `bootstrap/finops` |
+| A second dispatch while one waits for approval | one delivery at a time | ✅ queued behind the first; cancelled by hand |
+| Public logs of every run of the stage | no account id, no email | ✅ 0 and 0 in 33 lines across 51 runs |
+
+Raw results: [docs/evidence/ci-c4-2026-11-03/](evidence/ci-c4-2026-11-03/README.md).
+
+### 10.10 What proving it found
+
+The identity of C2 was derived from CloudTrail and exercised by C3 against an
+**empty** state. An empty-state plan proves a role can plan a create; it does
+not prove the role can read what it created. The first deliveries found four
+missing permissions:
+
+| Found | How it showed | Fix |
+|---|---|---|
+| Apply role: `kms:CreateAlias` on the key | `AccessDenied` | KMS authorises an alias call on the alias **and** on the key; the key half was missing |
+| Apply role: `lambda:TagResource` on the event source mapping | `AccessDenied` | tags sent on create are authorised as `TagResource`, which never appears as an event in CloudTrail |
+| Plan role: `s3:ListBucket` on a live bucket | **silent**: the 403 on `HeadBucket` was read as "bucket deleted"; the plan recreated the bucket and replaced its five configuration resources | granted on this environment's buckets only; `plan_guard` now refuses to recreate anything the refresh lost |
+| Plan role: `kms:Decrypt` of the function's environment | **silent**: Lambda returns no variables to a caller that cannot decrypt them; every plan updated the function | granted only through Lambda, only for this environment's functions, only on project keys |
+
+The two silent ones are why the pipeline has both a policy gate and a human
+gate: the guard caught the replacement; only a person comparing the plan with
+what they expected caught the update.
+
+Proving it also improved the tooling:
+
+| Found | Outcome |
+|---|---|
+| "Updated in place" listed by address alone gave the reviewer nothing to act on | **Fixed:** the summary names the changed attribute paths (`environment.0.variables.NAME`), never their values |
+| A resource the refresh lost appeared as an ordinary create | **Fixed:** refused by `plan_guard` (ADR-0025, D3) |
+| CloudTrail omits the encryption context of a refused `Decrypt` | **Learned:** the context Lambda sends was read from the apply role's successful calls, and confirmed with the IAM policy simulator before the fix |
+| A delivery waiting for approval holds the delivery queue | **By design** (one delivery at a time); documented below |
+
+### 10.11 Known limitations
+
+- **One maintainer** dispatches and approves every delivery (production
+  readiness, section 9).
+- **The lost-resource rule is proven by unit tests only.** Once the
+  permission was fixed, the situation could no longer be produced on AWS.
+- **The pre-destroy drift report cannot tell AWS-maintained attributes from a
+  manual change.** The event source mapping drifted after it processed
+  messages, which nobody changed by hand. Scheduled drift detection (C5) needs
+  a way to tell them apart.
+- **A run waiting for approval blocks the queue.** A second dispatch waits
+  behind it, and a third would cancel the waiting second.
+- **The data path is tested by the operator**, not by the pipeline: it needs
+  the fleet client's private key, which never leaves the operator's machine.
+- **The plan role can decrypt one thing**: a function's configuration, through
+  Lambda, for this environment. It cannot decrypt queue, table, bucket or
+  topic data.

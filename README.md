@@ -2,7 +2,7 @@
 
 > Serverless, event-driven AWS platform for **early wildfire detection** and **multi-stakeholder alerting**: sensors report, the cloud decides, the right people get alerted in seconds.
 
-**Status:** the v1.0 serverless core is complete. All eight infrastructure modules have been **deployed, tested end to end on real AWS and destroyed**: 15,110 messages processed, **0 lost**, with the evidence published in this repository. CI/CD is in progress: every pull request runs the full static quality gate and a real `terraform plan` against AWS as required checks, using an AWS identity through OIDC, with no stored keys, that cannot escalate its own privileges. Manual, approved deployment to the demo environment comes next.
+**Status:** the v1.0 serverless core is complete. All eight infrastructure modules have been **deployed, tested end to end on real AWS and destroyed**: 15,110 messages processed, **0 lost**, with the evidence published in this repository. CI/CD is in progress: every pull request runs the full static quality gate and a real `terraform plan` against AWS as required checks, using an AWS identity through OIDC, with no stored keys, that cannot escalate its own privileges. Deploying and destroying the demo environment runs from the pipeline too, behind a human approval, and only the plan the reviewer read can be applied. Dependency updates and scheduled drift detection come next.
 
 | [▶ Test evidence](docs/evidence/README.md) | [CI/CD](docs/ci-cd.md) | [Production readiness](docs/production-readiness.md) | [Design decisions](docs/adr/) |
 |---|---|---|---|
@@ -19,7 +19,7 @@ PyroSense explores how a cloud platform could close that gap: a network of senso
 
 - **Designed for production, deployed for demo.** The architecture is sized for a real fleet of about 500 sensors; the deployment is ephemeral and costs cents. Nothing in the design was simplified because the deployment is small.
 - **Grounded in a real problem.** The scenario, the stakeholders and the failure modes come from the actual 2024 event, which is why the limitations of this design are documented as carefully as its features ([production readiness](docs/production-readiness.md)).
-- **Every non-trivial decision is written down.** 24 Architecture Decision Records state the context, the decision, the alternatives rejected and when to revisit it.
+- **Every non-trivial decision is written down.** 25 Architecture Decision Records state the context, the decision, the alternatives rejected and when to revisit it.
 - **Nothing is claimed without evidence.** Each module was deployed, exercised against real AWS services, verified and destroyed before it was merged; the full system was then tested end to end, including injected failures.
 - **AI-assisted, human-owned.** AI tools drafted parts of the code. Every draft was reviewed against the official AWS and Terraform documentation before it was accepted, and the drafts that were wrong were rejected and the reasons recorded: a private key stored in Terraform state, a device policy that would have denied every real sensor, an alarm configuration that could never fire, among others.
 
@@ -42,6 +42,7 @@ The complete system was deployed from nothing and tested for several hours on AW
 | CI quality gate | 15 of 15 deliberately broken pull requests blocked from merging, each by the expected check · 0 sensitive values in the public logs ([evidence](docs/evidence/ci-c1-2026-10-23/README.md)) |
 | Terraform plan in pull requests | every pull request planned against real AWS with a read-only role · an invalid value caught that the static gate cannot see · a change to the always-on budget flagged before merge · 0 sensitive values in the public logs ([evidence](docs/evidence/ci-c3-2026-11-01/README.md)) |
 | Pipeline identity (OIDC) | AWS credentials with no stored key, each role only from its own context · 5 of 5 forbidden actions refused by AWS, including creating an IAM role without the permissions boundary · 0 sensitive values in the public logs ([evidence](docs/evidence/ci-c2-2026-10-23/README.md)) |
+| Delivery pipeline | `demo` deployed, tested end to end and destroyed from GitHub Actions behind a human approval · the plan applied is the plan the reviewer read · 4 missing permissions found by the first deliveries and fixed without wildcards · 0 account ids, 0 emails in the public logs ([C4 evidence](docs/evidence/ci-c4-2026-11-03/README.md)) |
 
 ![Every boundary of the pipeline agrees during the 502-sensor run](docs/evidence/v1.0-2026-10-15/charts/01-edge-to-storage.png)
 
@@ -121,7 +122,7 @@ The architecture is designed for a production fleet, but deployed ephemerally at
 | Cost control | AWS Budgets guardrail · ephemeral deployments |
 | Infrastructure as Code | Terraform ≥ 1.11, 8 modules, remote S3 state with native locking |
 | Quality gate | terraform fmt/validate, TFLint, Trivy, gitleaks, ruff, mypy (strict), pytest + moto (90 % branch-coverage floor), actionlint, pre-commit |
-| CI/CD | GitHub Actions: the full static gate as four required checks · `terraform plan` on every pull request as a fifth · AWS access through OIDC with a read-only plan role and a bounded apply role behind a protected environment · approved deploy next |
+| CI/CD | GitHub Actions: the full static gate as four required checks · `terraform plan` on every pull request as a fifth · AWS access through OIDC with a read-only plan role and a bounded apply role behind a protected environment · manual delivery of `demo` (apply / destroy) behind a required approval, applying only the reviewed plan |
 
 ---
 
@@ -138,13 +139,15 @@ Every pull request and every push to `develop` and `main` runs four required che
 
 A repository ruleset makes these four checks and `plan` required on `develop` and `main`, requires a pull request and allows no bypass. The static gate needs no cloud credentials.
 
-**Plan in every pull request.** The required check `plan` runs `terraform plan` of the demo environment with the read-only role, and writes a summary of resource addresses and actions, never values. Non-sensitive inputs come from the committed `demo.tfvars.example`; the recipients and the device CSR come from GitHub secrets and a variable. The plan file is never uploaded: it holds sensitive values in clear text (ADR-0024).
+**Plan in every pull request.** The required check `plan` runs `terraform plan` of the demo environment with the read-only role, and writes a summary of resource addresses and actions and, for in-place updates, the names of the changed attributes, never values. Non-sensitive inputs come from the committed `demo.tfvars.example`; the recipients and the device CSR come from GitHub secrets and a variable. The plan file is never uploaded: it holds sensitive values in clear text (ADR-0024).
 
 **Pinned toolchain.** Versions live in `.tool-versions` (binaries and Python) and `requirements-dev.txt` (Python packages). CI installs each binary only after checking it against a SHA-256 committed in `scripts/tooling/checksums.txt`, and every third-party action is pinned to a full commit SHA. Trivy uses the checks embedded in the pinned binary, so the same commit always gets the same verdict. `make tools` compares your local toolchain with the pins (ADR-0022).
 
-**Pipeline identity.** Jobs that call AWS get credentials for one job through OIDC; no access key exists. Pull requests can assume only a read-only plan role. Changes to the `demo` environment need an apply role, available only to a job in a GitHub environment that the maintainer approves. That role can create IAM roles only if they carry a permissions boundary, so it cannot grant itself, or anything it creates, more than the pipeline's data path (`bootstrap/ci-identity`, ADR-0023).
+**Pipeline identity.** Jobs that call AWS get credentials for one job through OIDC; no access key exists. Pull requests can assume only a read-only plan role. Changes to the `demo` environment need an apply role, available only to the delivery workflow (`deploy.yml` on `main`), in a GitHub environment that the maintainer approves. That role can create IAM roles only if they carry a permissions boundary, so it cannot grant itself, or anything it creates, more than the pipeline's data path (`bootstrap/ci-identity`, ADR-0023).
 
-**Proven, not assumed.** Every gate was tested by a pull request built to fail: 15 of 15 were blocked by the expected check, and testing the gate found and fixed problems in the gate itself. The identity was proven the same way: every forbidden action, the escalation path included, was refused by AWS. Why the pipeline is built this way, how each part was proven and what it does not cover yet: **[docs/ci-cd.md](docs/ci-cd.md)**.
+**Manual delivery.** `demo` is deployed and destroyed from the pipeline, never on a merge: the maintainer dispatches `deploy.yml` from `main`, reads the plan the read-only role produced, and approves the `demo` environment. Only then does the apply role exist for the job: it proves again that it cannot escalate, plans again, and applies only if that plan has the same fingerprint as the approved one. A policy gate refuses any delete in an apply, after an apply a second plan must be empty and a smoke test checks that every part is wired, and after a destroy the state must be empty. The account budget lives in its own stack, `bootstrap/finops`, so a destroy never has to leave anything behind (ADR-0025).
+
+**Proven, not assumed.** Every gate was tested by a pull request built to fail: 15 of 15 were blocked by the expected check, and testing the gate found and fixed problems in the gate itself. The identity was proven the same way: every forbidden action, the escalation path included, was refused by AWS. The first deliveries found four missing permissions, two of which failed silently; each was fixed with its reason, never a wildcard. Why the pipeline is built this way, how each part was proven and what it does not cover yet: **[docs/ci-cd.md](docs/ci-cd.md)**.
 
 ---
 
@@ -162,10 +165,11 @@ A repository ruleset makes these four checks and `plan` required on `develop` an
 ├── demo.tfvars.example  prod.tfvars.example                       # committed non-sensitive inputs per environment (sensitive ones: gitignored <env>.tfvars)
 ├── bootstrap/
 │   ├── state-backend/         # one-time remote state bucket
-│   └── ci-identity/           # pipeline identity: GitHub OIDC provider, plan and apply roles, workload boundary
+│   ├── ci-identity/           # pipeline identity: GitHub OIDC provider, plan and apply roles, workload boundary
+│   └── finops/                # the account budget: the only always-on resource, outside the demo state
 ├── config/                    # backend configuration (example committed)
 ├── modules/                   # one folder per concern, each with its README
-│   ├── budgets/               # account-wide cost guardrail
+│   ├── budgets/               # account-wide cost guardrail (used by bootstrap/finops)
 │   ├── security/              # pipeline KMS key and key policy
 │   ├── messaging/             # SQS queue + dead-letter queue
 │   ├── storage/               # DynamoDB table + S3 archive
@@ -177,14 +181,14 @@ A repository ruleset makes these four checks and `plan` required on `develop` an
 ├── tests/                     # pytest suite (moto: no AWS account needed)
 ├── scripts/                   # operator helpers; scripts/iot has the MQTT test publisher
 │   ├── tooling/               # hash-verified tool installer, version check, Trivy and gitleaks gates, guard
-│   └── ci/                    # helpers used by workflows: OIDC probe, plan summary, log redaction
+│   └── ci/                    # helpers used by workflows: plan guard, plan summary, smoke test, OIDC probe, redaction
 ├── docs/
 │   ├── adr/                   # Architecture Decision Records
-│   ├── evidence/              # test evidence: end-to-end run and CI gate (start here)
+│   ├── evidence/              # test evidence: end-to-end run and every CI/CD stage (start here)
 │   ├── github/                # repository ruleset and deployment environment, kept as code
 │   ├── ci-cd.md               # how the pipeline is designed and how it was proven
 │   └── production-readiness.md
-└── .github/workflows/         # CI (four required checks), Terraform plan (required) and the OIDC probe
+└── .github/workflows/         # CI (four required checks), Terraform plan (required), manual delivery (deploy) and the OIDC probe
 ```
 
 ---
@@ -206,16 +210,16 @@ A repository ruleset makes these four checks and `plan` required on `develop` an
 uv python install 3.12.13                       # the version pinned in .tool-versions
 uv venv --seed --python 3.12.13 .venv
 .venv/bin/python -m pip install -r requirements-dev.txt
-make py-test                                    # 95 tests + the 90 % branch-coverage floor
+make py-test                                    # 114 tests + the 90 % branch-coverage floor
 ```
 
 The full toolchain setup (linters, scanners, version check, hooks) is in [docs/ci-cd.md](docs/ci-cd.md#7-working-with-the-pipeline).
 
 > The suite runs entirely against an in-memory AWS (moto): no account, no credentials, no cost. See `tests/README.md`.
 
-**Deploy** (creates billable resources; destroy them when you are done):
+**Deploy** (creates billable resources; destroy them when you are done). Once the pipeline is set up, the usual path is **Actions → deploy → Run workflow** on `main` ([docs/ci-cd.md, section 10.8](docs/ci-cd.md#108-running-a-delivery)); the steps below are the operator path from a terminal:
 
-1. Create the state bucket once with `bootstrap/state-backend` (see its README) and write `config/backend.hcl` from the example.
+1. Create the state bucket once with `bootstrap/state-backend` (see its README) and write `config/backend.hcl` from the example. Apply `bootstrap/finops` once for the account budget (see its README).
 2. Create `demo.tfvars` with only the sensitive values: `ops_recipients`, `fire_alert_recipients` and `iot_fleet_client_csr_path`. Every other value comes from the committed `demo.tfvars.example`, which is passed first and overridden by `demo.tfvars` (two input layers, ADR-0024).
 3. Generate the device key pair and certificate request locally; the private key never enters Terraform (see `modules/iot/README.md`).
 4. Then:
@@ -254,7 +258,8 @@ terraform apply tfplan
 | End-to-end evidence run (whole system on AWS) | ✅ [Published](docs/evidence/README.md) |
 | CI/CD: pipeline identity (OIDC, plan and apply roles, permissions boundary) | ✅ [Proven](docs/evidence/ci-c2-2026-10-23/README.md) |
 | CI/CD: Terraform plan in every pull request (required check) | ✅ [Proven](docs/evidence/ci-c3-2026-11-01/README.md) |
-| CI/CD: manual, approved delivery to `demo` | ⬜ **Next** |
+| CI/CD: manual, approved delivery to `demo` | ✅ [Proven](docs/evidence/ci-c4-2026-11-03/README.md) |
+| CI/CD: dependency updates and scheduled drift detection | ⬜ **Next** |
 | Production cost model (AWS Pricing Calculator) | ⬜ Planned |
 | Historical analysis (Athena over the S3 archive) | ⬜ Planned |
 | Production hardening | ⬜ See [production readiness](docs/production-readiness.md) |
@@ -291,6 +296,7 @@ Every significant decision is an ADR under [`docs/adr/`](docs/adr/).
 | 0022 | CI quality gate and pinned, hash-verified toolchain |
 | 0023 | Pipeline identity through OIDC, two roles and a workload permissions boundary |
 | 0024 | Terraform plan in pull requests, with committed non-sensitive inputs and injected secrets |
+| 0025 | Manual delivery to `demo`: approve the plan you read, apply only a matching plan; the budget in its own stack |
 
 ---
 

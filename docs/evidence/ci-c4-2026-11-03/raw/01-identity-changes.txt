@@ -1,0 +1,37 @@
+# bootstrap/ci-identity, applied by the operator (plan excerpts)
+
+## 1. Trust pinned to deploy.yml on main; budget reads removed
+  # aws_iam_policy.read will be updated in-place
+                          - "budgets:ViewBudget",
+                          - "budgets:ListTagsForResource",
+  # aws_iam_role.apply will be updated in-place
+                              + "token.actions.githubusercontent.com:job_workflow_ref"    = "<OWNER>/pyrosense-infrastructure/.github/workflows/deploy.yml@refs/heads/main"
+  # aws_iam_role.plan will be updated in-place
+                              + "token.actions.githubusercontent.com:job_workflow_ref"    = "<OWNER>/pyrosense-infrastructure/.github/workflows/deploy.yml@refs/heads/main"
+Plan: 0 to add, 3 to change, 0 to destroy.
+
+## 2. After apply 1: key half of alias calls, ESM tags on create
+  # aws_iam_policy.apply_data will be updated in-place
+                                "aws:RequestTag/Environment" = "demo"
+                                "aws:RequestTag/Project"     = "PyroSense"
+                          + "kms:UpdateAlias",
+                          + "kms:DeleteAlias",
+                          + "kms:CreateAlias",
+  # aws_iam_policy.apply_infra will be updated in-place
+                      + Action    = "lambda:TagResource"
+                              + "aws:RequestTag/Environment" = "demo"
+                              + "aws:RequestTag/Project"     = "PyroSense"
+Plan: 0 to add, 2 to change, 0 to destroy.
+
+## 3. After apply 2: the plan role may HeadBucket this environment's buckets
+  # aws_iam_policy.read will be updated in-place
+                      + Action   = "s3:ListBucket"
+                      + Sid      = "HeadEnvironmentBuckets"
+Plan: 0 to add, 1 to change, 0 to destroy.
+
+## 4. After apply 3: the plan role may decrypt function configuration through Lambda
+  # aws_iam_policy.read will be updated in-place
+                      + Action    = "kms:Decrypt"
+                              + "kms:EncryptionContext:aws:lambda:FunctionArn" = "arn:aws:lambda:us-east-1:<ACCOUNT_ID>:function:pyrosense-demo-*"
+                              + "kms:ViaService"              = "lambda.us-east-1.amazonaws.com"
+Plan: 0 to add, 1 to change, 0 to destroy.

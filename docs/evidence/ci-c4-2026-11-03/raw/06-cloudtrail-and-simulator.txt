@@ -1,0 +1,40 @@
+# CloudTrail: Decrypt calls by the pipeline roles on 2026-11-03 (15:00-18:00 UTC)
+# context_keys are names only; CloudTrail omits them on refused calls
+2026-11-03T16:00:12Z  pyrosense-ci-apply-demo  ok  via=dynamodb.amazonaws.com  context_keys=aws:dynamodb:subscriberId,aws:dynamodb:tableName
+2026-11-03T16:00:21Z  pyrosense-ci-apply-demo  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T16:00:21Z  pyrosense-ci-apply-demo  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T16:00:27Z  pyrosense-ci-apply-demo  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T16:00:27Z  pyrosense-ci-apply-demo  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T16:00:27Z  pyrosense-ci-apply-demo  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T16:12:30Z  pyrosense-ci-plan  AccessDenied  via=lambda.amazonaws.com  context_keys=
+2026-11-03T16:12:30Z  pyrosense-ci-plan  AccessDenied  via=lambda.amazonaws.com  context_keys=
+2026-11-03T16:27:20Z  pyrosense-ci-plan  AccessDenied  via=lambda.amazonaws.com  context_keys=
+2026-11-03T16:27:20Z  pyrosense-ci-plan  AccessDenied  via=lambda.amazonaws.com  context_keys=
+2026-11-03T16:35:56Z  pyrosense-ci-plan  AccessDenied  via=lambda.amazonaws.com  context_keys=
+2026-11-03T16:35:56Z  pyrosense-ci-plan  AccessDenied  via=lambda.amazonaws.com  context_keys=
+2026-11-03T16:40:07Z  pyrosense-ci-plan  AccessDenied  via=lambda.amazonaws.com  context_keys=
+2026-11-03T16:40:07Z  pyrosense-ci-plan  AccessDenied  via=lambda.amazonaws.com  context_keys=
+2026-11-03T16:48:32Z  pyrosense-ci-plan  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T16:48:32Z  pyrosense-ci-plan  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T16:56:44Z  pyrosense-ci-plan  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T16:56:44Z  pyrosense-ci-plan  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T16:57:51Z  pyrosense-ci-apply-demo  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T16:57:52Z  pyrosense-ci-apply-demo  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T16:58:32Z  pyrosense-ci-apply-demo  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T16:58:32Z  pyrosense-ci-apply-demo  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T16:58:36Z  pyrosense-ci-apply-demo  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T17:19:27Z  pyrosense-ci-plan  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T17:19:28Z  pyrosense-ci-plan  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T17:19:37Z  pyrosense-ci-plan  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T17:19:37Z  pyrosense-ci-plan  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T17:21:22Z  pyrosense-ci-apply-demo  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+2026-11-03T17:21:22Z  pyrosense-ci-apply-demo  ok  via=lambda.amazonaws.com  context_keys=aws:lambda:FunctionArn
+
+# IAM policy simulator, plan role, after the fixes (resource names are examples within the scopes)
+s3 on a demo bucket:
+s3:ListBucket	allowed
+s3:GetObject	implicitDeny
+kms:Decrypt via Lambda, for a demo function:
+kms:Decrypt	allowed
+kms:Decrypt via SQS (queue data):
+kms:Decrypt	implicitDeny

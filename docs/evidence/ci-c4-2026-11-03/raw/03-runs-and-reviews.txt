@@ -1,0 +1,32 @@
+# Every deploy.yml run since 2026-11-02: jobs and the reviewer's decision
+
+run 41667210596  2026-11-03T15:45:39Z  completed/failure
+  job preflight: success
+  job plan: success
+  job deliver: failure
+  review: approved: C4 first apply: summary read, 50 create, 0 destroy
+
+run 41667666914  2026-11-03T15:48:22Z  completed/cancelled
+
+run 41671689559  2026-11-03T16:11:55Z  completed/failure
+  job preflight: success
+  job plan: failure
+  job deliver: skipped
+
+run 41674256553  2026-11-03T16:26:40Z  completed/failure
+  job preflight: success
+  job plan: success
+  job deliver: failure
+  review: rejected: C4 apply 3 rejected: the CI plan updates the ingest function in place, the operator's local plan does not. Investigating before applying.
+
+run 41679207525  2026-11-03T16:56:07Z  completed/success
+  job preflight: success
+  job plan: success
+  job deliver: success
+  review: approved: C4 apply: 2 creates, 0 updates, matches the operator's local plan
+
+run 41683026752  2026-11-03T17:18:54Z  completed/success
+  job preflight: success
+  job plan: success
+  job deliver: success
+  review: approved: C4 destroy: 50 destroy, 0 create

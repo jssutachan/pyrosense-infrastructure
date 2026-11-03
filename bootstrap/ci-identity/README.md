@@ -11,11 +11,22 @@ and [docs/ci-cd.md, section 8](../../docs/ci-cd.md#8-pipeline-identity-c2).
 |---|---|
 | `main.tf` | identity provider, trust policies (who may assume), roles, attachments |
 | `boundary.tf` | the workload permissions boundary |
-| `permissions.tf` | what each role may do: read, state, apply (data, infra, IAM) |
+| `permissions.tf` | what each role may do: read (with one declared exception: a function's configuration, decrypted through Lambda), state, apply (data, infra, IAM) |
 
 This stack is applied by the operator, with administrator credentials. The
 pipeline cannot change it: the apply role is denied every IAM write on the
 pipeline's own roles, policies and identity provider.
+
+## Who can assume each role
+
+| Role | Contexts it trusts | Can write |
+|---|---|---|
+| `pyrosense-ci-plan` | pull requests of this repository; the `plan` job of `deploy.yml` on `main` | only the state lock |
+| `pyrosense-ci-apply-demo` | the `deliver` job of `deploy.yml` on `main`, in the GitHub environment `demo`, after the maintainer approves | the state and `pyrosense-demo-*` resources |
+
+Both also require this repository's and owner's numeric ids and the
+maintainer as actor. The deploy contexts are pinned with `job_workflow_ref`:
+a new workflow file gets no credentials until this stack changes (ADR-0025).
 
 ## Prerequisites
 
@@ -70,8 +81,27 @@ default branch.
 - **The pipeline gets `AccessDenied`** in plan or apply: add the exact action
   to `permissions.tf`, in the statement whose scope fits, with a comment if
   the reason is not obvious. Never widen to a service wildcard.
+- **A missing read can fail silently.** The plan role is tested against live
+  resources only by a delivery. In C4, a refused `HeadBucket` was read by the
+  provider as "bucket deleted", and a function environment it could not
+  decrypt as "variables removed": both became plans that changed live
+  resources. When the pipeline's plan differs from an operator's plan of the
+  same state, look for `AccessDenied` from `pyrosense-ci-plan` in CloudTrail
+  (including `kms:Decrypt` made through another service) before approving
+  anything.
 
 Every change here is a pull request like any other, then an operator apply.
+
+## Proving it
+
+- `oidc-probe.yml` runs on pull requests that touch this stack: the plan role
+  works, writes are refused, the apply role cannot be assumed from a pull
+  request.
+- The apply role's negative checks (a role without the boundary, a resource of
+  another environment, the pipeline's own role) run at the start of every
+  delivery in `deploy.yml`, the only workflow the role trusts.
+- Evidence: [C2](../../docs/evidence/ci-c2-2026-10-23/README.md) and
+  [C4](../../docs/evidence/ci-c4-2026-11-03/README.md).
 
 ## Destroying
 

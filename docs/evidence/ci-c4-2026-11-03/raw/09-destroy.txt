@@ -1,0 +1,19 @@
+# Destroy (run 41683026752)
+## Drift before the destroy (reported, not blocking)
+drift: module.ingest.aws_lambda_event_source_mapping.sqs
+drifted=1
+
+## Deliver
+ok: apply role creates an unbounded role -> refused by AWS
+ok: apply role creates a prod queue -> refused by AWS
+ok: apply role tags its own role -> refused by AWS
+plan matches the approved one
+resources left in state: 0
+Apply complete! Resources: 0 added, 0 changed, 50 destroyed.
+
+## Independent checks, now
+main state resources: 0
+finops state: 1
+alarms pyrosense-demo*: 0
+functions pyrosense-demo*: 0
+budget: pyrosense-demo-monthly-cost
