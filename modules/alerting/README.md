@@ -8,9 +8,9 @@ email subscriptions.
 | Fire-risk alerts | `<name_prefix>-fire-alerts` | ingest Lambda (`alerts.publish_alert`) | Its own IAM role (identity policy) | Responders (`fire_alert_recipients`) |
 | Operational alarms | `<name_prefix>-ops-alarms` | CloudWatch Alarms (future `observability`) | A topic policy statement for the `cloudwatch.amazonaws.com` service principal | Platform operators (`ops_recipients`) |
 
-Design decisions: [ADR-0014](../../docs/adr/ADR-0014-alerting-module-shape.md)
+Design decisions: [ADR-0014](../../docs/adr/ADR-0014-Alerting-as-one-module-with-two-purpose-built-topics-keyed-by-recipient-labels.md)
 (one module with two purpose-built topics; recipient labels as `for_each`
-keys) and [ADR-0015](../../docs/adr/ADR-0015-email-only-alert-channel-v1.md)
+keys) and [ADR-0015](../../docs/adr/ADR-0015-Email-is-the-only-alert-channel-in-v1.0-scoped-as-non-life-safety.md)
 (email-only delivery in v1.0, scoped as non-life-safety).
 
 > [!IMPORTANT]

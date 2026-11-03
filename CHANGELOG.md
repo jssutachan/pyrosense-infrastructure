@@ -272,6 +272,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/evidence/ci-c1-2026-10-23/`: evidence of the CI quality gate: the first
   green run, the ruleset, a rejected direct push, a public-log scan with no
   sensitive values, and 15 provoked failures, each blocked by the expected check.
+- `bootstrap/ci-identity`: the AWS identity of the CI/CD pipeline, a long-lived
+  stack applied by the operator, with remote state under its own key. It
+  holds the GitHub OIDC identity provider, a read-only `pyrosense-ci-plan`
+  role assumable only from pull requests, a `pyrosense-ci-apply-demo` role
+  assumable only from the `demo` GitHub environment, and the
+  `pyrosense-workload-boundary` permissions boundary. Trust policies match
+  exactly on the immutable `sub`, the repository and owner ids and the
+  maintainer's actor id. Permissions were derived from CloudTrail, scoped by
+  exact object, `pyrosense-demo-*` name, project tags or, for configuration
+  reads only, `*`. (ADR-0023)
+- `.github/workflows/oidc-probe.yml` and `scripts/ci/oidc-probe.sh`: a
+  workflow that obtains real credentials, creates nothing, prints the claims
+  AWS evaluated and asserts that forbidden actions are refused by AWS with an
+  authorization error. It runs on pull requests that change the identity and
+  manually in the `demo` environment.
+- `docs/github/environment-demo.json`: the `demo` environment (required
+  reviewer, `main` as the only deployment branch, no administrator bypass),
+  kept as code.
+- ADR-0023 — Pipeline identity through OIDC, two roles and a workload
+  permissions boundary.
+- `docs/ci-cd.md` section 8: how the pipeline obtains AWS credentials, why the
+  apply role cannot escalate, where the permission list came from, and how it
+  was proven.
+- `docs/evidence/ci-c2-2026-10-23/`: evidence of the pipeline identity. It
+  covers both roles assumed from their own context and the apply role refused
+  from a pull request. Five forbidden actions were refused by AWS, including
+  creating an IAM role without the boundary. The CloudTrail record of every
+  credential request is included, along with a public-log scan with no
+  sensitive values.
+- `.github/workflows/plan.yml`: the required check `plan` runs `terraform plan`
+  of `demo` on every pull request with the read-only OIDC role. Its text
+  output stays on the runner. The job summary lists resource addresses and
+  actions only, with destroys and replaces under a warning. No artifact is
+  uploaded, and a running plan is never cancelled while it holds the state
+  lock. (ADR-0024)
+- `scripts/ci/plan-summary.sh` (summary from the plan JSON, reading only
+  `address` and `change.actions`), `scripts/ci/redact.sh` (account ids and
+  emails removed from error output) and `scripts/tooling/tool-version.sh`
+  (exact-version pin check, shared by `ci.yml` and `plan.yml`).
+- GitHub configuration for the plan: secrets `DEMO_OPS_RECIPIENTS` and
+  `DEMO_FIRE_ALERT_RECIPIENTS`, and the repository variable
+  `DEMO_IOT_FLEET_CLIENT_CSR`.
+- ADR-0024 — Terraform plan in pull requests.
+- `docs/ci-cd.md` section 9: how the plan check works, where its inputs come
+  from, why nothing sensitive reaches the log, and how it was proven.
+- `docs/evidence/ci-c3-2026-11-01/`: evidence of the plan check. It shows the
+  first CI plan equal to the operator's, and an invalid value caught by
+  `plan` while the static checks stayed green. A rename of the always-on
+  budget is flagged as a replace before merge, and a public-log scan finds no
+  sensitive values.
 
 ### Changed
 
@@ -350,9 +400,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-0022 accepted after the C1 run.
 - Root `README.md`: CI/CD link, CI gate row in "Proof it works", "Proven, not
   assumed" paragraph, test setup with `uv` and the pinned Python, `make py-test`.
-- `docs/evidence/README.md`: index of evidence sets (end-to-end run, CI gate).
+- `docs/evidence/README.md`: index of evidence sets (end-to-end run, CI gate,
+  pipeline identity).
+- **Requires `bootstrap/ci-identity`:** `modules/iot` and `modules/ingest` take
+  a required `permissions_boundary_arn` input and set it on their three IAM
+  roles. The root reads the boundary by name (`data "aws_iam_policy"`), so a
+  plan fails early if the bootstrap stack has not been applied. (ADR-0023)
+- `Makefile`: `bootstrap/ci-identity` joins `BOOTSTRAP_ROOTS`, so `make
+  validate` and the `terraform` CI check cover it.
+- Root `README.md`: pipeline identity in the status, "Proof it works", tech
+  stack, continuous integration, repository structure, getting started,
+  roadmap and ADR index.
+- `docs/production-readiness.md`: pipeline identity items in section 9 and
+  the summary; the state-access item in section 6 reflects the scoped roles.
+- ADR-0023 accepted after the C2 run.
+- **Two input layers (tfvars):** `demo.tfvars.example` and
+  `prod.tfvars.example` are now the committed source of every non-sensitive
+  value. The gitignored `<env>.tfvars` holds only `ops_recipients`,
+  `fire_alert_recipients` and `iot_fleet_client_csr_path`, and overrides the
+  placeholders. `make plan`, `make apply` and `make destroy` pass both files
+  (`ENV=demo` by default). (ADR-0024)
+- Repository ruleset: `plan` added to the required checks.
+- `ci.yml`: the Terraform pin check moved to `scripts/tooling/tool-version.sh`;
+  the error message is unchanged.
+- Root `README.md`: getting started describes the two input layers;
+  `scripts/README.md` lists `tooling/` and `ci/`.
+- ADR-0024 accepted after the C3 run.
 
 ### Fixed
+
+- ADR file names and links: links pointed to names that did not exist, and
+  ADR-0013 had no `.md` extension. Every link to `docs/adr/` now resolves.
+
+- `bootstrap/state-backend`: the justification for disabling S3 access logging
+  said CloudTrail records "S3 API calls" on the state bucket. That holds for
+  bucket-level calls only; reads and writes of the state object are data
+  events, not recorded without a trail. The comment now says so and was
+  re-evaluated for the pipeline roles that now read the state. (ADR-0023)
 
 - `contract` validation, from senior review of the AI-drafted ingest core:
   reject non-finite numbers (`NaN`/`Infinity` previously slipped past range
@@ -410,6 +494,18 @@ queue", wording already corrected inside the module; it now states the
   log. (ADR-0022)
 
 ### Security
+
+- The CI/CD pipeline has no long-lived AWS credentials: every job that calls
+  AWS obtains them through GitHub OIDC for one job. The plan role cannot
+  write anything but the state lock. The apply role can create IAM roles only
+  if they carry the workload permissions boundary. It may pass them only to
+  Lambda and IoT, and it is explicitly denied removing a boundary and any IAM
+  write on the pipeline's own roles, policies and identity provider. (ADR-0023)
+- Pipeline role ARNs are GitHub secrets, and the credentials action masks the
+  account id: an ARN in a non-secret input would be printed in the public
+  workflow log.
+- `backend.hcl` is gitignored in every folder, not only under `config/`; the
+  new stack's copy, which holds the account id, was untracked before this.
 
 - Backend configuration is excluded from version control: the state bucket
   name carries the AWS account ID as a suffix.

@@ -8,9 +8,9 @@ repository for the first time.
 | Stage | What it adds | Status |
 |---|---|---|
 | **C1 — Static CI** | The full quality gate runs on every pull request as four required checks | ✅ Done · [evidence](evidence/ci-c1-2026-10-23/README.md) · [ADR-0022](adr/) |
-| **C2 — Pipeline identity** | AWS access for the pipeline through OIDC: no stored keys, a read-only plan role and a scoped apply role that cannot escalate | 🔄 In progress · [section 8](#8-pipeline-identity-c2) · [ADR-0023](adr/0023-pipeline-identity-oidc-and-workload-boundary.md) |
-| C3 — Plan in pull requests | `terraform plan` on every pull request, summarised without sensitive values | ⬜ Planned |
-| C4 — Manual delivery to `demo` | Deploy and destroy from the pipeline, behind a human approval | ⬜ Planned |
+| **C2 — Pipeline identity** | AWS access for the pipeline through OIDC: no stored keys, a read-only plan role and a scoped apply role that cannot escalate | ✅ Done · [section 8](#8-pipeline-identity-c2) · [evidence](evidence/ci-c2-2026-10-23/README.md) · [ADR-0023](adr/ADR-0023-pipeline-identity-oidc-and-workload-boundary.md) |
+| **C3 — Plan in pull requests** | `terraform plan` on every pull request, summarised without sensitive values | ✅ Done · [section 9](#9-plan-in-pull-requests-c3) · [evidence](evidence/ci-c3-2026-11-01/README.md) · [ADR-0024](adr/ADR-0024-terraform-plan-in-pull-requests.md) |
+| **C4 — Manual delivery to `demo`** | Deploy and destroy from the pipeline, behind a human approval | 🔄 In progress · [section 10](#10-manual-delivery-to-demo-c4) · [ADR-0025](adr/ADR-0025-manual-delivery-to-demo.md) |
 | C5 — Upkeep | Dependency updates and scheduled drift detection | ⬜ Planned |
 
 PyroSense follows **continuous delivery, not continuous deployment**: every
@@ -57,7 +57,8 @@ protects `develop` and `main`:
 - force pushes and branch deletion are blocked;
 - the bypass list is empty, so the repository owner cannot skip it either.
 
-C1 needs **no cloud credentials**: the gate is static and runs offline from AWS.
+The static gate needs **no cloud credentials** and runs offline from AWS. The
+jobs that do call AWS get short-lived credentials through OIDC (section 8).
 
 ---
 
@@ -284,6 +285,11 @@ targets, so the same command reproduces the failure locally.
 **If a secret is ever pushed:** rotate it first. Deleting the commit does not
 un-publish it.
 
+**Changing what the pipeline may do in AWS:** the roles, their permissions and
+the workload boundary live in `bootstrap/ci-identity` and are applied by the
+operator, never by the pipeline. Its [README](../bootstrap/ci-identity/README.md)
+says how to add a missing action without widening the scope.
+
 ---
 
 ## 8. Pipeline identity (C2)
@@ -320,8 +326,8 @@ the token is worth is decided in AWS, by the role's trust policy.
 
 | | `pyrosense-ci-plan` | `pyrosense-ci-apply-demo` |
 |---|---|---|
-| Used by | `terraform plan` in pull requests (C3) | apply and destroy of `demo` (C4) |
-| Assumable from | a pull request of this repository | a job in the GitHub environment `demo`, after the maintainer approves it |
+| Used by | `terraform plan` in pull requests (C3) and the plan shown before a delivery (C4) | apply and destroy of `demo` (C4) |
+| Assumable from | a pull request of this repository, or the `plan` job of `deploy.yml` on `main` | the `deliver` job of `deploy.yml` on `main`, in the GitHub environment `demo`, after the maintainer approves it |
 | Reads | project configuration (no data), main state | the same |
 | Writes | only the state lock file | the state, and resources named `pyrosense-demo-*` |
 | Can create IAM roles | no | only `pyrosense-demo-*` roles that carry the workload boundary |
@@ -339,7 +345,8 @@ claim fails closed.
 | Claim | Plan role | Apply role | Why |
 |---|---|---|---|
 | `aud` | `sts.amazonaws.com` | `sts.amazonaws.com` | the token was minted for AWS |
-| `sub` | `repo:<owner>@<id>/<repo>@<id>:pull_request` | `repo:<owner>@<id>/<repo>@<id>:environment:demo` | this repository **and** this context |
+| `sub` | `repo:<owner>@<id>/<repo>@<id>:pull_request`, or `…:ref:refs/heads/main` (deploy plan job) | `repo:<owner>@<id>/<repo>@<id>:environment:demo` | this repository **and** this context |
+| `job_workflow_ref` | `<owner>/<repo>/.github/workflows/deploy.yml@refs/heads/main` (deploy plan job only) | the same | only one workflow file, on one branch, can deliver (ADR-0025) |
 | `repository_id`, `repository_owner_id` | this repository's ids | the same | numeric ids cannot be re-registered by someone else after a rename or deletion |
 | `actor_id` | the maintainer | the maintainer | a run started by anyone else gets no credentials, including a pull request from a fork |
 
@@ -408,6 +415,7 @@ applied by the operator:
 |---|---|---|---|
 | `bootstrap/state-backend` | local (cannot store its own state) | operator | permanent |
 | `bootstrap/ci-identity` | state bucket, own key, unreadable by the pipeline roles | operator | permanent |
+| `bootstrap/finops` | state bucket, `bootstrap/finops/terraform.tfstate`, unreadable by the pipeline roles | operator | permanent: the account budget (ADR-0025) |
 | main configuration | state bucket, `pyrosense/terraform.tfstate` | operator today; the pipeline from C4 | `demo`: one test cycle |
 
 The main configuration reads the boundary by name. If `bootstrap/ci-identity`
@@ -420,19 +428,320 @@ is created.
 |---|---|---|
 | Repository secret `AWS_PLAN_ROLE_ARN` | output `plan_role_arn` | an ARN contains the account id; a non-secret `with:` input is printed in the public log |
 | Environment `demo` → required reviewer | the maintainer | nothing deploys without a person deciding it |
-| Environment `demo` → deployment branches | the default branch | changes reach AWS only after review and merge |
+| Environment `demo` → deployment branches | `main` only | changes reach AWS only after review and merge |
+| Environment `demo` → administrator bypass | off | the approval is not optional, not even for the repository owner |
 | Environment `demo` → secret `AWS_APPLY_ROLE_ARN` | output `apply_role_arn` | unavailable to a job until the reviewer approves |
+
+The environment is kept as code in
+[docs/github/environment-demo.json](github/environment-demo.json), like the
+ruleset. The order matters: a workflow that names an environment that does not
+exist yet makes GitHub create it **without any protection**, so the
+environment is configured before the first run that uses it.
 
 ### 8.8 How it is proven
 
 [`.github/workflows/oidc-probe.yml`](../.github/workflows/oidc-probe.yml) gets
 real credentials and creates nothing. For each role it shows the claims AWS
-evaluated and the role it became, then asserts that forbidden actions are
-**refused by AWS**:
+evaluated and the role it became. Then it asserts that the forbidden actions
+are **refused by AWS**: an authorization error passes, while a success or any
+other error fails the job.
 
-| Job | Must be allowed | Must be refused |
+| Job | Allowed | Refused by AWS | Result |
+|---|---|---|---|
+| `plan-role` (pull requests touching the identity) | assume the plan role; find the boundary by name | create a queue; assume the apply role from a pull request | ✅ 2 of 2 refused |
+| `apply-role` (manual, environment `demo`, approved) | assume the apply role; find the boundary by name | create a role **without** the boundary; create a `pyrosense-prod-*` resource; tag the pipeline's own role | ✅ 3 of 3 refused |
+
+More proof:
+- **CloudTrail recorded 5 credential requests that day.** 3 were accepted: two
+  plan-role requests from pull requests and the approved apply-role request.
+  The other 2 were refused: the apply role, requested from pull requests.
+- **The `sub` claims use the immutable format** in pull requests and
+  environments. GitHub documents that format only for branches.
+- **The three workload roles** carry the boundary in a plan of the main
+  configuration.
+- **The public logs show 0 account ids and 0 emails** across 795 lines.
+
+Raw results: [docs/evidence/ci-c2-2026-10-23/](evidence/ci-c2-2026-10-23/README.md).
+
+### 8.9 What proving it found
+
+| Found | Outcome |
+|---|---|
+| `backend.hcl` was ignored only under `config/`; the new stack's copy, which holds the account id, appeared as untracked | **Fixed:** ignored in every folder |
+| New GitHub environments allow administrator bypass by default | **Fixed:** bypass off, kept in `docs/github/environment-demo.json` |
+| CloudTrail's list of calls is not a permission list (API names differ from IAM actions; implicit permissions and data events are missing) | **By design:** list translated and completed by hand; C3 and C4 exercise it for real |
+| The state bucket's logging suppression claimed CloudTrail recorded its object access | **Corrected:** object reads and writes are data events, not recorded without a trail; production needs one |
+| The main configuration reads the IoT CSR from a file on the operator's machine | **Open for C3:** the plan job must receive the CSR, which is public material, some other way |
+
+### 8.10 Known limitations of the identity
+
+- **Certificates are scoped to the account, not the project.** IoT
+  certificates have random ids and cannot be tagged through Terraform, so the
+  apply role's certificate actions cover the whole account and region.
+- **Tag-based scoping of KMS keys.** The apply role could tag another
+  customer managed key of the account into scope. Today every CMK in the
+  account belongs to PyroSense.
+- **Object access to state is not audited.** There is no trail with S3 data
+  events.
+- **The apply role is pinned to a file, not to its content.** Since C4 it
+  trusts only `deploy.yml` on `main` (`job_workflow_ref`); whatever is merged
+  into that file is trusted, so the required checks are the control on it.
+- **One maintainer.** The environment's required reviewer is the same person
+  who triggers the run (production readiness, section 9).
+
+---
+
+## 9. Plan in pull requests (C3)
+
+C1 checks that a change is well written; C2 gave the pipeline a read-only
+way into AWS. C3 uses that access so every pull request shows **what the
+change would do to AWS**, before anyone merges it. The decision record is
+ADR-0024; the workflow is
+[`.github/workflows/plan.yml`](../.github/workflows/plan.yml).
+
+### 9.1 What a reviewer gets
+
+The required check `plan` runs `terraform plan` against `demo` and writes a
+summary on the run page. It shows only resource addresses and actions:
+
+```text
+Terraform plan: demo
+| Create | Update | Replace | Destroy | Unchanged |
+|     50 |      0 |       0 |       0 |         0 |
+No existing resource is destroyed or replaced.
+▸ Created (50)            module.security.aws_kms_key.pipeline, ...
+```
+
+Until C4 the summary also showed the budget as `Unchanged (1)`. The budget
+now lives in its own stack (section 8.6), so between cycles the main state is
+empty.
+
+Any destroy or replace is listed first, under a warning. Because `demo` is
+ephemeral (ADR-0002), most plans show the stack as "create". The plan is
+still worth running on every change, for three reasons:
+- it evaluates what the static gate cannot: data sources, preconditions with
+  real values, and the plan role's permissions;
+- it proves that nothing outside the ephemeral environment is in its state;
+- it shows any destroy before the merge, not during an apply.
+
+### 9.2 How the job runs
+
+```mermaid
+flowchart LR
+    PR["Pull request"] --> J["job: plan<br/>(id-token: write)"]
+    J -->|"OIDC"| R["pyrosense-ci-plan<br/>read + state lock"]
+    J --> L1["layer 1: demo.tfvars.example<br/>(committed)"]
+    J --> L2["layer 2: secrets + CSR variable<br/>(built at run time)"]
+    R & L1 & L2 --> P["terraform plan<br/>text output → file only"]
+    P --> S["plan-summary.sh<br/>addresses + actions"]
+    S --> SUM["job summary + log"]
+    P -. "error only" .-> RED["redact.sh → log"]
+```
+
+### 9.3 Where the plan's inputs come from
+
+Two layers. A later `-var-file` overrides an earlier one:
+
+| Layer | File | Holds | Locally | In CI |
+|---|---|---|---|---|
+| 1 | `demo.tfvars.example` (committed) | every non-sensitive value: environment, KMS window, `allow_data_destruction` | `make plan` passes it first | passed first |
+| 2 | sensitive layer | `ops_recipients`, `fire_alert_recipients`, `iot_fleet_client_csr_path` | gitignored `demo.tfvars`, with only these three | a JSON file built from two secrets and one variable, deleted at the end of the job |
+
+The committed file is the single source of every value a reader can see.
+CI and the operator cannot disagree on the KMS window or the data-destruction
+switch, because both read the same file. Only what is actually sensitive lives
+outside the repository. The budget's own recipients are set in
+`bootstrap/finops`, which the pipeline never reads.
+
+The fleet client's CSR is a **variable, not a secret**: it holds a public key
+and a name. The private key never leaves the operator's machine (ADR-0017).
+
+### 9.4 Nothing sensitive in the public log
+
+| Output | Where it goes | Why |
 |---|---|---|
-| `plan-role` (pull requests touching the identity) | assume the plan role; find the boundary by name | create a queue; assume the apply role from a pull request |
-| `apply-role` (manual, environment `demo`) | assume the apply role; find the boundary by name | create a role **without** the boundary; create a `pyrosense-prod-*` resource; tag the pipeline's own role |
+| `terraform init` and `plan` text | a file on the runner; on error, the last lines through `scripts/ci/redact.sh` | the text prints ARNs (account id) and the IoT endpoint |
+| Plan JSON | read by `scripts/ci/plan-summary.sh`, which takes `address` and `change.actions` only, then deleted | the JSON holds every value in clear text; sensitive ones are only flagged, not removed |
+| Plan file | deleted at the end of the job; **never** uploaded | it holds the recipients in clear text, and artifacts of a public repository are downloadable by anyone signed in |
+| Account id | masked by the credentials action, and replaced again by `redact.sh` | two independent layers |
 
-Results and evidence: added when C2 closes.
+The plan in a pull request is informational. The deploy job (C4) plans again
+after approval and applies that plan.
+
+### 9.5 How it fits the gate
+
+- **Required check, no path filter.** A required check that a `paths:` filter
+  skips never reports, and the pull request stays blocked (ADR-0022).
+- **Skipped where no token can exist.** Pull requests from forks and from
+  Dependabot get no secrets and no OIDC token, and the plan role trusts only
+  the maintainer's runs. The job is skipped there with `if:`, and GitHub
+  counts a job skipped by a condition as a success.
+- **A running plan is never cancelled.** It holds the state lock, and a
+  cancelled job leaves the lock file in S3. Pushes to the same pull request
+  queue. Plans of different pull requests wait up to five minutes for the
+  lock.
+
+### 9.6 Configuration
+
+| Setting | Kind | Value |
+|---|---|---|
+| `DEMO_OPS_RECIPIENTS` | repository secret | JSON object `{"<label>": "<email>"}`; the labels must match `demo.tfvars.example` |
+| `DEMO_FIRE_ALERT_RECIPIENTS` | repository secret | same shape |
+| `DEMO_IOT_FLEET_CLIENT_CSR` | repository variable | the PEM CSR of the demo fleet client |
+| `AWS_PLAN_ROLE_ARN` | repository secret | from C2 |
+| Ruleset | [`docs/github/ruleset-protected-branches.json`](github/ruleset-protected-branches.json) | `plan` added to the required checks |
+
+**Changing a recipient** means updating the local `demo.tfvars` and the
+secret together. **Rotating the fleet client key** means regenerating the
+key and CSR (`modules/iot/README.md`), then updating the local path and the
+variable.
+
+### 9.7 How it is proven
+
+| Test | Expected | Result |
+|---|---|---|
+| First plan in CI vs the operator's local plan, both with two layers | the same summary | ✅ both 50 create · 1 unchanged (the budget); no extra permission needed by the plan role |
+| **P1:** `kms_deletion_window_days = 3` in the committed inputs | `plan` red, the four static checks green, merge blocked | ✅ `Invalid value for variable … between 7 and 30`; `terraform validate` cannot see it because it does not read tfvars |
+| **P2:** the always-on budget renamed | `plan` green, the change flagged before merge | ✅ `Replace: 1` under a warning: renaming a budget replaces it |
+| Public logs of the plan runs | no account id, no email | ✅ 0 and 0 in 1,589 lines |
+| Ruleset | `plan` required | ✅ five required checks |
+
+Raw results: [docs/evidence/ci-c3-2026-11-01/](evidence/ci-c3-2026-11-01/README.md).
+
+### 9.8 What proving it found
+
+| Found | Outcome |
+|---|---|
+| The plan check passes on a change that replaces the only live resource | **By design:** the plan informs, it does not approve. The warning is at the top of the summary, and the decision to apply is the approval in C4 |
+| The fleet client's key and CSR were lost with a laptop reinstall | **Regenerated**; the key is backed up off the machine and the CSR lives in a GitHub variable as well |
+| Terraform's coloured output made failure logs hard to read | **Fixed:** `-no-color` on `init` and `plan` |
+| A merge attempted right after a push was refused | **Correct:** the ruleset requires the checks of the latest commit |
+
+### 9.9 Known limitations
+
+- **Most plans show the whole stack as "create".** `demo` is ephemeral, so
+  the plan proves that a change can be planned against real AWS; it does not
+  show a diff against a running environment.
+- **Pull requests from forks and Dependabot merge without a plan.** They get
+  no OIDC token. The next maintainer pull request, or the scheduled drift
+  check (C5), covers them.
+- **The summary lists addresses, not attribute changes.** A reviewer who
+  needs the details runs `make plan` locally.
+- **Recipients live in two places**, the local `demo.tfvars` and two GitHub
+  secrets, and must be changed together.
+
+---
+
+## 10. Manual delivery to `demo` (C4)
+
+C3 shows what a change would do. C4 lets the pipeline do it: deploy and destroy
+`demo` from GitHub Actions, behind the maintainer's approval, instead of from a
+laptop with personal credentials. The decision record is ADR-0025; the
+workflow is [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml).
+
+### 10.1 One run, three jobs
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor M as Maintainer
+    participant P as preflight<br/>(no credentials)
+    participant PL as plan<br/>(plan role)
+    participant E as environment demo
+    participant D as deliver<br/>(apply role)
+    M->>P: dispatch from main: operation + confirm
+    P->>P: main only? confirm == operation?
+    P->>PL: needs
+    PL->>PL: plan, policy gate, fingerprint
+    PL-->>M: summary on the run page
+    M->>E: approve (required reviewer, main only, no bypass)
+    E->>D: job starts; only now a token and AWS_APPLY_ROLE_ARN exist
+    D->>D: prove the role cannot escalate
+    D->>D: plan again; fingerprint must match the approved one
+    D->>D: apply, then verify (convergence + smoke, or empty state)
+```
+
+| Job | Credentials | Does | Fails when |
+|---|---|---|---|
+| `preflight` | none | checks the branch and that `confirm` repeats the operation | not `main`; the confirmation does not match |
+| `plan` | `pyrosense-ci-plan` (read-only) | plans, writes the summary, fingerprints the plan; before a destroy, reports drift | plan error; the policy gate refuses the plan |
+| `deliver` | `pyrosense-ci-apply-demo`, after the approval | re-plans, checks the fingerprint, applies, verifies | the plan changed since the approval; apply error; no convergence; a smoke check; resources left after destroy |
+
+If the plan has nothing to do, `deliver` is skipped and nobody is asked to
+approve.
+
+### 10.2 The reviewer approves what they read
+
+The approval happens **after** the `plan` job has written its summary on the
+run page, so the maintainer reads the plan and then decides. The plan file is
+never passed to `deliver`: it holds the recipients in clear text, and artifacts
+of a public repository are downloadable by anyone signed in. `deliver` plans
+again and refuses to apply unless both plans have the same **fingerprint**: a
+SHA-256 over every managed resource's address and actions, never its values.
+If anything changed between the two plans, nothing is applied.
+
+### 10.3 What each operation may do
+
+[`scripts/ci/plan_guard.py`](../scripts/ci/plan_guard.py) enforces it in both
+jobs, and its tests are part of the `python` check:
+
+| Operation | Allowed | Refused |
+|---|---|---|
+| `apply` | create, update, no-op; replacing a resource a failed apply left tainted | any other delete or replace |
+| `destroy` | delete, no-op | anything else |
+| both | | an action the guard does not know (fail closed) |
+
+### 10.4 Why the budget left the main state
+
+Until C4 the budget lived in the same state as `demo`. A pipeline destroy would
+have had to skip it on every run, and the apply role has no budgets permission
+on purpose. The budget now lives in `bootstrap/finops` (section 8.6), so
+`destroy` empties the main state completely, and the post-destroy check can
+require exactly zero resources.
+
+### 10.5 Who can deliver
+
+- The apply role trusts only `deploy.yml` on `main` (`job_workflow_ref`), in
+  the environment `demo`, started by the maintainer. A new workflow file that
+  names the environment gets no credentials.
+- The plan role trusts the `plan` job of the same file on `main`, besides pull
+  requests. It remains read-only.
+- Before writing anything, `deliver` re-runs the negative checks of C2: creating
+  a role without the boundary, creating a `pyrosense-prod-*` resource and
+  tagging the pipeline's own role must all be **refused by AWS**.
+
+### 10.6 Verification after every operation
+
+| After | Check | Why |
+|---|---|---|
+| `apply` | a second plan is empty | catches perpetual diffs and anything changed during the apply |
+| `apply` | [`scripts/ci/smoke-demo.sh`](../scripts/ci/smoke-demo.sh): function active, mapping enabled, certificate active with its policy, rule enabled, redrive to the DLQ, DLQ empty, key enabled and rotating, table and bucket encrypted, every alarm present, subscriptions present | the parts exist **and are wired**, not only created |
+| before `destroy` | refresh-only plan: drift reported | someone changed `demo` outside Terraform; reported, not blocking, so a billed environment is never left up |
+| `destroy` | the state lists 0 resources | nothing outlives the cycle |
+
+The smoke test reads configuration only. Sending telemetry needs the fleet
+client's private key, which never leaves the operator's machine (ADR-0017), and
+the pipeline never touches data. After an apply, the operator confirms the
+email subscriptions (`scripts/alerting/sns-confirm.sh`; the smoke test reports
+how many are pending) and runs the end-to-end test.
+
+### 10.7 What reaches the public log
+
+The same discipline as C3 (section 9.4), applied to `apply` as well: command
+output goes to files on the runner; the log shows the plan summary, the
+`Apply complete!` line, the guard's addresses and the smoke test's PASS/FAIL
+lines; failures show their last lines through `scripts/ci/redact.sh`; every
+plan file is deleted at the end of each job. The fleet certificate is a
+sensitive output, and the workflow never reads it.
+
+### 10.8 Running a delivery
+
+1. Merge to `main`.
+2. **Actions → deploy → Run workflow** on `main`; choose `apply` or `destroy`
+   and type the same word in `confirm`.
+3. Read the `plan` job's summary, then approve the `demo` environment.
+4. After an `apply`: confirm the email subscriptions and run the end-to-end
+   test. After a `destroy`: nothing to do.
+
+A failed `apply` leaves part of `demo` deployed. Dispatch `apply` again to
+continue, or `destroy` to remove it.

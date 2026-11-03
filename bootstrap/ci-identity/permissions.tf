@@ -65,8 +65,6 @@ data "aws_iam_policy_document" "read" {
     sid    = "DescribeProjectConfiguration"
     effect = "Allow"
     actions = [
-      "budgets:ListTagsForResource",
-      "budgets:ViewBudget",
       "cloudwatch:DescribeAlarms",
       "cloudwatch:GetDashboard",
       "cloudwatch:ListTagsForResource",

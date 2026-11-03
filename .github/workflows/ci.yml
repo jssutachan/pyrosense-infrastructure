@@ -69,15 +69,12 @@ jobs:
 
       # setup-terraform resolves an empty or malformed version to the latest
       # release, so a missing pin would install a different Terraform and
-      # stay green. Only an exact X.Y.Z passes.
+      # stay green. Only an exact X.Y.Z passes; the check lives in one script
+      # shared with the plan workflow.
       - name: Read the pinned Terraform version
         id: pins
         run: |
-          version="$(awk '$1 == "terraform" { print $2 }' .tool-versions)"
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error file=.tool-versions::terraform must be pinned to an exact X.Y.Z version (found: '${version}')"
-            exit 1
-          fi
+          version="$(scripts/tooling/tool-version.sh terraform)"
           echo "terraform=${version}" >> "$GITHUB_OUTPUT"
 
       # The wrapper rewrites stdout and the exit status into step outputs;

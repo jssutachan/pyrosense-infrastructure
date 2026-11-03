@@ -32,7 +32,8 @@
           { "context": "python", "integration_id": 15368 },
           { "context": "terraform", "integration_id": 15368 },
           { "context": "security", "integration_id": 15368 },
-          { "context": "hygiene", "integration_id": 15368 }
+          { "context": "hygiene", "integration_id": 15368 },
+          { "context": "plan", "integration_id": 15368 }
         ]
       }
     }

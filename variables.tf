@@ -1,10 +1,12 @@
 # ==============================================================================
 # Root input contract.
 #
-# Values arrive from demo.tfvars / prod.tfvars (both gitignored; only the
-# .example templates are committed). Per ADR-0002, this contract is the entire
-# demo/production delta: the code is written once for production, and only the
-# values below change between environments.
+# Values arrive in two layers (ADR-0024): the committed <env>.tfvars.example
+# with every non-sensitive value, then the sensitive layer (recipients and the
+# CSR path) from a gitignored <env>.tfvars locally or from GitHub secrets in
+# CI. Per ADR-0002, this contract is the entire demo/production delta: the
+# code is written once for production, and only the values below change
+# between environments.
 #
 # Anything identical in both environments belongs as a module default, not here.
 # ==============================================================================
@@ -49,17 +51,8 @@ variable "resource_prefix" {
 }
 
 # ------------------------------------------------------------------------------
-# FinOps guardrail — consumed by module.budgets (ADR-0003)
-# ------------------------------------------------------------------------------
-
-variable "budget_limit_usd" {
-  description = "Monthly account cost budget in USD. Set per environment in tfvars."
-  type        = number
-}
-
-# ------------------------------------------------------------------------------
-# Notification recipients — consumed by module.budgets and module.alerting
-# (ADR-0003, ADR-0014)
+# Notification recipients — consumed by module.alerting (ADR-0014). The
+# account budget has its own copy in bootstrap/finops (ADR-0025).
 #
 # Maps of { label = email }, not lists of addresses. Terraform always discloses
 # for_each keys in resource addresses, so alerting keys its subscriptions by
@@ -75,7 +68,7 @@ variable "budget_limit_usd" {
 # ------------------------------------------------------------------------------
 
 variable "ops_recipients" {
-  description = "Platform operators, as { label = email }. Receive budget notifications (module.budgets) and CloudWatch alarm notifications (module.alerting ops topic). One intent, one input: these are the people who run the platform."
+  description = "Platform operators, as { label = email }. Receive CloudWatch alarm notifications (module.alerting ops topic). The account budget notifies its own copy of this map in bootstrap/finops (ADR-0025)."
   type        = map(string)
   sensitive   = true
 }

@@ -1,0 +1,24 @@
+pull request #26 (closed without merging), checks:
+  plan	fail
+  hygiene	pass
+  plan-role	pass
+  python	pass
+  security	pass
+  terraform	pass
+  apply-role	skipping
+
+run: 41378374698
+job plan: failure, 29s
+
+│ Error: Invalid value for variable
+│
+│   on demo.tfvars.example line 68:
+│   68: kms_deletion_window_days = 3
+│     ├────────────────
+│     │ var.kms_deletion_window_days is 3
+│
+│ kms_deletion_window_days must be between 7 and 30 inclusive (AWS KMS
+│ limit).
+│
+│ This was checked by the validation rule at variables.tf:106,3-13.
+╵
