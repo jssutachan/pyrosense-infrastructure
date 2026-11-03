@@ -14,9 +14,23 @@ json="${1:?usage: plan-summary.sh <plan.json> [environment]}"
 env_name="${2:-demo}"
 
 jq -r --arg env "$env_name" '
-  [ .resource_changes[]? | {address, a: (.change.actions | join(","))} ] as $all
+  # Paths of the attributes an in-place update changes, down to the leaf
+  # (environment.0.variables.NAME). Values are compared in memory and never
+  # printed; unknown-after-apply counts as changed. Paths are names only: map
+  # keys in this project are labels, never addresses (ADR-0014).
+  def changed_attrs:
+    (.change.before // {}) as $b | (.change.after // {}) as $a | (.change.after_unknown // {}) as $u
+    | ([$b, $a | paths(scalars)] + [$u | paths(. == true)]) | unique
+    | map(. as $p
+          | select((try ($a | getpath($p)) catch "?a") != (try ($b | getpath($p)) catch "?b")
+                   or (try ($u | getpath($p)) catch null) == true))
+    | map(map(tostring) | join("."))
+    | .[:10];
+  [ .resource_changes[]? | {address, a: (.change.actions | join(",")),
+      attrs: (if (.change.actions | join(",")) == "update" then changed_attrs else [] end)} ] as $all
   | ($all | map(select(.a == "create")  | .address)) as $create
   | ($all | map(select(.a == "update")  | .address)) as $update
+  | ($all | map(select(.a == "update")  | "- `\(.address)` (attributes: `\(.attrs | join("`, `"))`)")) as $update_lines
   | ($all | map(select(.a == "delete")  | .address)) as $delete
   | ($all | map(select(.a == "delete,create" or .a == "create,delete") | .address)) as $replace
   | ($all | map(select(.a == "no-op")   | .address)) as $unchanged
@@ -32,12 +46,12 @@ jq -r --arg env "$env_name" '
            + ((($replace|map(. + " (replace)")) + $delete) | map("> - `\(.)`") | join("\n"))
       else "No existing resource is destroyed or replaced." end ),
     "",
-    ( if ($update|length) > 0 then "**Updated in place**\n\n" + ($update|bullets) + "\n" else empty end ),
+    ( if ($update|length) > 0 then "**Updated in place**\n\n" + ($update_lines|join("\n")) + "\n" else empty end ),
     ( if ($create|length) > 0
       then "<details><summary>Created (\($create|length))</summary>\n\n" + ($create|bullets) + "\n\n</details>\n"
       else empty end ),
     ( if ($unchanged|length) > 0
       then "<details><summary>Unchanged, already deployed (\($unchanged|length))</summary>\n\n" + ($unchanged|bullets) + "\n\n</details>\n"
       else empty end ),
-    "Addresses and actions only: attribute values are never printed. `demo` is ephemeral (ADR-0002), so while it is destroyed every resource appears under **Create**; the always-on budget lives in `bootstrap/finops`."
+    "Addresses, actions and the names of changed attributes only: attribute values are never printed. `demo` is ephemeral (ADR-0002), so while it is destroyed every resource appears under **Create**; the always-on budget lives in `bootstrap/finops`."
 ' "$json"

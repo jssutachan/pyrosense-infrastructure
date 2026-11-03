@@ -57,9 +57,10 @@ locals {
 # (a queue's attributes, a role's policy, a bucket's lifecycle rules), and
 # most of them cannot be scoped by ARN anyway. What is excluded is the DATA:
 # no s3:GetObject on data buckets, no dynamodb:GetItem/Query/Scan, no
-# sqs:ReceiveMessage, no logs:GetLogEvents, no kms:Decrypt. That is why this is
-# a written list and not the AWS-managed ReadOnlyAccess policy, which grants
-# reads of data as well.
+# sqs:ReceiveMessage, no logs:GetLogEvents, no kms:Decrypt of data (the one
+# Decrypt below only reads function configuration, through Lambda). That is
+# why this is a written list and not the AWS-managed ReadOnlyAccess policy,
+# which grants reads of data as well.
 data "aws_iam_policy_document" "read" {
   statement {
     sid    = "DescribeProjectConfiguration"
@@ -133,6 +134,56 @@ data "aws_iam_policy_document" "read" {
       "sqs:ListQueueTags",
     ]
     resources = ["*"]
+  }
+
+  # The provider refreshes a bucket with HeadBucket, which S3 authorises as
+  # s3:ListBucket. Without it the refresh of a live demo bucket got a 403 that
+  # the provider read as "bucket gone": the plan created the bucket again and
+  # replaced its five configuration resources (C4, caught by plan_guard).
+  # Listing returns object names, never contents; this environment only.
+  statement {
+    sid       = "HeadEnvironmentBuckets"
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
+    resources = [local.scoped.bucket]
+  }
+
+  # The ingest function's environment is encrypted with the pipeline CMK
+  # (ADR-0010), and Lambda decrypts it for GetFunction with the CALLER's
+  # permissions. Without this the plan role's refresh got no variables and
+  # every plan updated the function (C4; CloudTrail: Decrypt AccessDenied via
+  # lambda.amazonaws.com). Only through Lambda, only for this environment's
+  # functions (the context Lambda sends), only the project's keys: no queue,
+  # table, bucket or topic data can be decrypted with it.
+  statement {
+    sid       = "ReadEnvironmentFunctionConfiguration"
+    effect    = "Allow"
+    actions   = ["kms:Decrypt"]
+    resources = [local.scoped.kms_key]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["lambda.${local.region}.amazonaws.com"]
+    }
+
+    condition {
+      test     = "ArnLike"
+      variable = "kms:EncryptionContext:aws:lambda:FunctionArn"
+      values   = [local.scoped.lambda]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/Project"
+      values   = ["PyroSense"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/Environment"
+      values   = [var.deploy_environment]
+    }
   }
 }
 
@@ -235,10 +286,17 @@ data "aws_iam_policy_document" "apply_data" {
   # which create grants for themselves when a CMK is configured; the
   # GrantIsForAWSResource condition stops the role from granting the key to
   # anyone directly.
+  #
+  # The alias actions are here too: KMS authorises an alias call on the alias
+  # (ManageProjectAliases) AND on the key, and this is the key half. Missing
+  # until the first pipeline apply failed on kms:CreateAlias (C4).
   statement {
     sid    = "ManageProjectKeys"
     effect = "Allow"
     actions = [
+      "kms:CreateAlias",
+      "kms:DeleteAlias",
+      "kms:UpdateAlias",
       "kms:DescribeKey",
       "kms:DisableKeyRotation",
       "kms:EnableKeyRotation",
@@ -418,6 +476,30 @@ data "aws_iam_policy_document" "apply_infra" {
       test     = "ArnLike"
       variable = "lambda:FunctionArn"
       values   = [local.scoped.lambda]
+    }
+  }
+
+  # Event source mappings accept tags, and the provider sends default_tags
+  # when it creates one: Lambda authorises that as lambda:TagResource on the
+  # mapping. Never an event in CloudTrail, so the October list missed it (C4,
+  # first pipeline apply). The ARN is a random UUID, so the scope is the tags
+  # being applied: only this project's and environment's.
+  statement {
+    sid       = "TagEnvironmentEventSourcesOnCreate"
+    effect    = "Allow"
+    actions   = ["lambda:TagResource"]
+    resources = ["arn:${local.partition}:lambda:${local.arn_regional}:event-source-mapping:*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/Project"
+      values   = ["PyroSense"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/Environment"
+      values   = [var.deploy_environment]
     }
   }
 

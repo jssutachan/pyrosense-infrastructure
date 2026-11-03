@@ -14,6 +14,11 @@ reads the JSON of a saved plan (`terraform show -json tfplan`) and:
               failed earlier apply left tainted (the only way to recover).
      destroy  delete, no-op. Nothing may be created or changed.
    An action this script does not know is refused: fail closed.
+   In apply, a resource that is in the state but that the refresh could no
+   longer find (resource_drift: delete) and that the plan would create again
+   is refused too: either someone deleted it outside Terraform, or the
+   planning role is missing a read permission. Either way a person decides,
+   not the pipeline. A tainted replacement is allowed but always reported.
 3. For `drift`, lists the addresses of a refresh-only plan's resource_drift.
 
 Prints key=value lines on stdout (for $GITHUB_OUTPUT) and diagnostics on
@@ -86,7 +91,19 @@ def has_changes(changes: Sequence[Change]) -> bool:
     return any(c.actions != ("no-op",) for c in changes)
 
 
-def violations(operation: str, changes: Sequence[Change]) -> list[str]:
+def lost_addresses(plan: dict[str, Any]) -> frozenset[str]:
+    """Return managed resources in the state that the refresh no longer found."""
+    return frozenset(
+        str(entry["address"])
+        for entry in plan.get("resource_drift", [])
+        if entry.get("mode", "managed") == "managed"
+        and tuple(entry["change"]["actions"]) == ("delete",)
+    )
+
+
+def violations(
+    operation: str, changes: Sequence[Change], lost: frozenset[str] = frozenset()
+) -> list[str]:
     """List the changes the operation is not allowed to make, by address."""
     allowed = ALLOWED[operation]
     found = []
@@ -94,6 +111,12 @@ def violations(operation: str, changes: Sequence[Change]) -> list[str]:
         unknown = set(change.actions) - KNOWN_ACTIONS
         if unknown:
             found.append(f"{change.address}: unknown action {sorted(unknown)}")
+            continue
+        if operation == "apply" and change.address in lost and "create" in change.actions:
+            found.append(
+                f"{change.address}: in the state but no longer readable, planned as create "
+                "(deleted outside Terraform, or a read permission is missing)"
+            )
             continue
         refused = set(change.actions) - allowed
         if not refused:
@@ -126,6 +149,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"drifted={len(drifted)}")
             return 0
         changes = managed_changes(plan)
+        lost = lost_addresses(plan)
     except (OSError, ValueError, KeyError, TypeError) as err:
         print(
             f"::error::plan_guard: cannot read the plan ({type(err).__name__})",
@@ -138,7 +162,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"changes={'true' if has_changes(changes) else 'false'}")
 
     status = 0
-    for problem in violations(args.operation, changes):
+    for change in changes:
+        if change.reason == TAINTED:
+            print(f"::warning::plan_guard: {change.address}: replaced (tainted)", file=sys.stderr)
+    for problem in violations(args.operation, changes, lost):
         print(f"::error::plan_guard: {problem}", file=sys.stderr)
         status = 1
     if args.expect is not None and args.expect != digest:
