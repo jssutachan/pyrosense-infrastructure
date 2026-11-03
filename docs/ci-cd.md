@@ -10,7 +10,7 @@ repository for the first time.
 | **C1 — Static CI** | The full quality gate runs on every pull request as four required checks | ✅ Done · [evidence](evidence/ci-c1-2026-10-23/README.md) · [ADR-0022](adr/) |
 | **C2 — Pipeline identity** | AWS access for the pipeline through OIDC: no stored keys, a read-only plan role and a scoped apply role that cannot escalate | ✅ Done · [section 8](#8-pipeline-identity-c2) · [evidence](evidence/ci-c2-2026-10-23/README.md) · [ADR-0023](adr/ADR-0023-pipeline-identity-oidc-and-workload-boundary.md) |
 | **C3 — Plan in pull requests** | `terraform plan` on every pull request, summarised without sensitive values | ✅ Done · [section 9](#9-plan-in-pull-requests-c3) · [evidence](evidence/ci-c3-2026-11-01/README.md) · [ADR-0024](adr/ADR-0024-terraform-plan-in-pull-requests.md) |
-| C4 — Manual delivery to `demo` | Deploy and destroy from the pipeline, behind a human approval | ⬜ Next |
+| **C4 — Manual delivery to `demo`** | Deploy and destroy from the pipeline, behind a human approval | 🔄 In progress · [section 10](#10-manual-delivery-to-demo-c4) · [ADR-0025](adr/ADR-0025-manual-delivery-to-demo.md) |
 | C5 — Upkeep | Dependency updates and scheduled drift detection | ⬜ Planned |
 
 PyroSense follows **continuous delivery, not continuous deployment**: every
@@ -326,8 +326,8 @@ the token is worth is decided in AWS, by the role's trust policy.
 
 | | `pyrosense-ci-plan` | `pyrosense-ci-apply-demo` |
 |---|---|---|
-| Used by | `terraform plan` in pull requests (C3) | apply and destroy of `demo` (C4) |
-| Assumable from | a pull request of this repository | a job in the GitHub environment `demo`, after the maintainer approves it |
+| Used by | `terraform plan` in pull requests (C3) and the plan shown before a delivery (C4) | apply and destroy of `demo` (C4) |
+| Assumable from | a pull request of this repository, or the `plan` job of `deploy.yml` on `main` | the `deliver` job of `deploy.yml` on `main`, in the GitHub environment `demo`, after the maintainer approves it |
 | Reads | project configuration (no data), main state | the same |
 | Writes | only the state lock file | the state, and resources named `pyrosense-demo-*` |
 | Can create IAM roles | no | only `pyrosense-demo-*` roles that carry the workload boundary |
@@ -345,7 +345,8 @@ claim fails closed.
 | Claim | Plan role | Apply role | Why |
 |---|---|---|---|
 | `aud` | `sts.amazonaws.com` | `sts.amazonaws.com` | the token was minted for AWS |
-| `sub` | `repo:<owner>@<id>/<repo>@<id>:pull_request` | `repo:<owner>@<id>/<repo>@<id>:environment:demo` | this repository **and** this context |
+| `sub` | `repo:<owner>@<id>/<repo>@<id>:pull_request`, or `…:ref:refs/heads/main` (deploy plan job) | `repo:<owner>@<id>/<repo>@<id>:environment:demo` | this repository **and** this context |
+| `job_workflow_ref` | `<owner>/<repo>/.github/workflows/deploy.yml@refs/heads/main` (deploy plan job only) | the same | only one workflow file, on one branch, can deliver (ADR-0025) |
 | `repository_id`, `repository_owner_id` | this repository's ids | the same | numeric ids cannot be re-registered by someone else after a rename or deletion |
 | `actor_id` | the maintainer | the maintainer | a run started by anyone else gets no credentials, including a pull request from a fork |
 
@@ -482,8 +483,9 @@ Raw results: [docs/evidence/ci-c2-2026-10-23/](evidence/ci-c2-2026-10-23/README.
   account belongs to PyroSense.
 - **Object access to state is not audited.** There is no trail with S3 data
   events.
-- **The apply role is not yet pinned to a workflow file.** `job_workflow_ref`
-  is added when the deploy workflow exists (C4).
+- **The apply role is pinned to a file, not to its content.** Since C4 it
+  trusts only `deploy.yml` on `main` (`job_workflow_ref`); whatever is merged
+  into that file is trusted, so the required checks are the control on it.
 - **One maintainer.** The environment's required reviewer is the same person
   who triggers the run (production readiness, section 9).
 
@@ -627,3 +629,119 @@ Raw results: [docs/evidence/ci-c3-2026-11-01/](evidence/ci-c3-2026-11-01/README.
   needs the details runs `make plan` locally.
 - **Recipients live in two places**, the local `demo.tfvars` and two GitHub
   secrets, and must be changed together.
+
+---
+
+## 10. Manual delivery to `demo` (C4)
+
+C3 shows what a change would do. C4 lets the pipeline do it: deploy and destroy
+`demo` from GitHub Actions, behind the maintainer's approval, instead of from a
+laptop with personal credentials. The decision record is ADR-0025; the
+workflow is [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml).
+
+### 10.1 One run, three jobs
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor M as Maintainer
+    participant P as preflight<br/>(no credentials)
+    participant PL as plan<br/>(plan role)
+    participant E as environment demo
+    participant D as deliver<br/>(apply role)
+    M->>P: dispatch from main: operation + confirm
+    P->>P: main only? confirm == operation?
+    P->>PL: needs
+    PL->>PL: plan, policy gate, fingerprint
+    PL-->>M: summary on the run page
+    M->>E: approve (required reviewer, main only, no bypass)
+    E->>D: job starts; only now a token and AWS_APPLY_ROLE_ARN exist
+    D->>D: prove the role cannot escalate
+    D->>D: plan again; fingerprint must match the approved one
+    D->>D: apply, then verify (convergence + smoke, or empty state)
+```
+
+| Job | Credentials | Does | Fails when |
+|---|---|---|---|
+| `preflight` | none | checks the branch and that `confirm` repeats the operation | not `main`; the confirmation does not match |
+| `plan` | `pyrosense-ci-plan` (read-only) | plans, writes the summary, fingerprints the plan; before a destroy, reports drift | plan error; the policy gate refuses the plan |
+| `deliver` | `pyrosense-ci-apply-demo`, after the approval | re-plans, checks the fingerprint, applies, verifies | the plan changed since the approval; apply error; no convergence; a smoke check; resources left after destroy |
+
+If the plan has nothing to do, `deliver` is skipped and nobody is asked to
+approve.
+
+### 10.2 The reviewer approves what they read
+
+The approval happens **after** the `plan` job has written its summary on the
+run page, so the maintainer reads the plan and then decides. The plan file is
+never passed to `deliver`: it holds the recipients in clear text, and artifacts
+of a public repository are downloadable by anyone signed in. `deliver` plans
+again and refuses to apply unless both plans have the same **fingerprint**: a
+SHA-256 over every managed resource's address and actions, never its values.
+If anything changed between the two plans, nothing is applied.
+
+### 10.3 What each operation may do
+
+[`scripts/ci/plan_guard.py`](../scripts/ci/plan_guard.py) enforces it in both
+jobs, and its tests are part of the `python` check:
+
+| Operation | Allowed | Refused |
+|---|---|---|
+| `apply` | create, update, no-op; replacing a resource a failed apply left tainted | any other delete or replace |
+| `destroy` | delete, no-op | anything else |
+| both | | an action the guard does not know (fail closed) |
+
+### 10.4 Why the budget left the main state
+
+Until C4 the budget lived in the same state as `demo`. A pipeline destroy would
+have had to skip it on every run, and the apply role has no budgets permission
+on purpose. The budget now lives in `bootstrap/finops` (section 8.6), so
+`destroy` empties the main state completely, and the post-destroy check can
+require exactly zero resources.
+
+### 10.5 Who can deliver
+
+- The apply role trusts only `deploy.yml` on `main` (`job_workflow_ref`), in
+  the environment `demo`, started by the maintainer. A new workflow file that
+  names the environment gets no credentials.
+- The plan role trusts the `plan` job of the same file on `main`, besides pull
+  requests. It remains read-only.
+- Before writing anything, `deliver` re-runs the negative checks of C2: creating
+  a role without the boundary, creating a `pyrosense-prod-*` resource and
+  tagging the pipeline's own role must all be **refused by AWS**.
+
+### 10.6 Verification after every operation
+
+| After | Check | Why |
+|---|---|---|
+| `apply` | a second plan is empty | catches perpetual diffs and anything changed during the apply |
+| `apply` | [`scripts/ci/smoke-demo.sh`](../scripts/ci/smoke-demo.sh): function active, mapping enabled, certificate active with its policy, rule enabled, redrive to the DLQ, DLQ empty, key enabled and rotating, table and bucket encrypted, every alarm present, subscriptions present | the parts exist **and are wired**, not only created |
+| before `destroy` | refresh-only plan: drift reported | someone changed `demo` outside Terraform; reported, not blocking, so a billed environment is never left up |
+| `destroy` | the state lists 0 resources | nothing outlives the cycle |
+
+The smoke test reads configuration only. Sending telemetry needs the fleet
+client's private key, which never leaves the operator's machine (ADR-0017), and
+the pipeline never touches data. After an apply, the operator confirms the
+email subscriptions (`scripts/alerting/sns-confirm.sh`; the smoke test reports
+how many are pending) and runs the end-to-end test.
+
+### 10.7 What reaches the public log
+
+The same discipline as C3 (section 9.4), applied to `apply` as well: command
+output goes to files on the runner; the log shows the plan summary, the
+`Apply complete!` line, the guard's addresses and the smoke test's PASS/FAIL
+lines; failures show their last lines through `scripts/ci/redact.sh`; every
+plan file is deleted at the end of each job. The fleet certificate is a
+sensitive output, and the workflow never reads it.
+
+### 10.8 Running a delivery
+
+1. Merge to `main`.
+2. **Actions → deploy → Run workflow** on `main`; choose `apply` or `destroy`
+   and type the same word in `confirm`.
+3. Read the `plan` job's summary, then approve the `demo` environment.
+4. After an `apply`: confirm the email subscriptions and run the end-to-end
+   test. After a `destroy`: nothing to do.
+
+A failed `apply` leaves part of `demo` deployed. Dispatch `apply` again to
+continue, or `destroy` to remove it.
