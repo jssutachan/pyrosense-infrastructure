@@ -235,10 +235,17 @@ data "aws_iam_policy_document" "apply_data" {
   # which create grants for themselves when a CMK is configured; the
   # GrantIsForAWSResource condition stops the role from granting the key to
   # anyone directly.
+  #
+  # The alias actions are here too: KMS authorises an alias call on the alias
+  # (ManageProjectAliases) AND on the key, and this is the key half. Missing
+  # until the first pipeline apply failed on kms:CreateAlias (C4).
   statement {
     sid    = "ManageProjectKeys"
     effect = "Allow"
     actions = [
+      "kms:CreateAlias",
+      "kms:DeleteAlias",
+      "kms:UpdateAlias",
       "kms:DescribeKey",
       "kms:DisableKeyRotation",
       "kms:EnableKeyRotation",
@@ -418,6 +425,30 @@ data "aws_iam_policy_document" "apply_infra" {
       test     = "ArnLike"
       variable = "lambda:FunctionArn"
       values   = [local.scoped.lambda]
+    }
+  }
+
+  # Event source mappings accept tags, and the provider sends default_tags
+  # when it creates one: Lambda authorises that as lambda:TagResource on the
+  # mapping. Never an event in CloudTrail, so the October list missed it (C4,
+  # first pipeline apply). The ARN is a random UUID, so the scope is the tags
+  # being applied: only this project's and environment's.
+  statement {
+    sid       = "TagEnvironmentEventSourcesOnCreate"
+    effect    = "Allow"
+    actions   = ["lambda:TagResource"]
+    resources = ["arn:${local.partition}:lambda:${local.arn_regional}:event-source-mapping:*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/Project"
+      values   = ["PyroSense"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/Environment"
+      values   = [var.deploy_environment]
     }
   }
 
