@@ -14,12 +14,18 @@ json="${1:?usage: plan-summary.sh <plan.json> [environment]}"
 env_name="${2:-demo}"
 
 jq -r --arg env "$env_name" '
-  # Names of the top-level attributes an in-place update changes. Values are
-  # compared in memory and never printed; unknown-after-apply counts as changed.
+  # Paths of the attributes an in-place update changes, down to the leaf
+  # (environment.0.variables.NAME). Values are compared in memory and never
+  # printed; unknown-after-apply counts as changed. Paths are names only: map
+  # keys in this project are labels, never addresses (ADR-0014).
   def changed_attrs:
     (.change.before // {}) as $b | (.change.after // {}) as $a | (.change.after_unknown // {}) as $u
-    | [ (($a | keys) + ($b | keys) + ($u | keys)) | unique[]
-        | select($a[.] != $b[.] or (($u[.] // false) | tostring | test("true"))) ];
+    | ([$b, $a | paths(scalars)] + [$u | paths(. == true)]) | unique
+    | map(. as $p
+          | select((try ($a | getpath($p)) catch "?a") != (try ($b | getpath($p)) catch "?b")
+                   or (try ($u | getpath($p)) catch null) == true))
+    | map(map(tostring) | join("."))
+    | .[:10];
   [ .resource_changes[]? | {address, a: (.change.actions | join(",")),
       attrs: (if (.change.actions | join(",")) == "update" then changed_attrs else [] end)} ] as $all
   | ($all | map(select(.a == "create")  | .address)) as $create
