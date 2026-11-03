@@ -57,9 +57,10 @@ locals {
 # (a queue's attributes, a role's policy, a bucket's lifecycle rules), and
 # most of them cannot be scoped by ARN anyway. What is excluded is the DATA:
 # no s3:GetObject on data buckets, no dynamodb:GetItem/Query/Scan, no
-# sqs:ReceiveMessage, no logs:GetLogEvents, no kms:Decrypt. That is why this is
-# a written list and not the AWS-managed ReadOnlyAccess policy, which grants
-# reads of data as well.
+# sqs:ReceiveMessage, no logs:GetLogEvents, no kms:Decrypt of data (the one
+# Decrypt below only reads function configuration, through Lambda). That is
+# why this is a written list and not the AWS-managed ReadOnlyAccess policy,
+# which grants reads of data as well.
 data "aws_iam_policy_document" "read" {
   statement {
     sid    = "DescribeProjectConfiguration"
@@ -145,6 +146,44 @@ data "aws_iam_policy_document" "read" {
     effect    = "Allow"
     actions   = ["s3:ListBucket"]
     resources = [local.scoped.bucket]
+  }
+
+  # The ingest function's environment is encrypted with the pipeline CMK
+  # (ADR-0010), and Lambda decrypts it for GetFunction with the CALLER's
+  # permissions. Without this the plan role's refresh got no variables and
+  # every plan updated the function (C4; CloudTrail: Decrypt AccessDenied via
+  # lambda.amazonaws.com). Only through Lambda, only for this environment's
+  # functions (the context Lambda sends), only the project's keys: no queue,
+  # table, bucket or topic data can be decrypted with it.
+  statement {
+    sid       = "ReadEnvironmentFunctionConfiguration"
+    effect    = "Allow"
+    actions   = ["kms:Decrypt"]
+    resources = [local.scoped.kms_key]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["lambda.${local.region}.amazonaws.com"]
+    }
+
+    condition {
+      test     = "ArnLike"
+      variable = "kms:EncryptionContext:aws:lambda:FunctionArn"
+      values   = [local.scoped.lambda]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/Project"
+      values   = ["PyroSense"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/Environment"
+      values   = [var.deploy_environment]
+    }
   }
 }
 
