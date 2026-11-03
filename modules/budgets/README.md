@@ -4,6 +4,10 @@ Account-wide AWS Budgets guardrail for the PyroSense account: a single
 recurring monthly cost budget that emails when actual or forecasted spend
 crosses a threshold.
 
+Instantiated by [`bootstrap/finops`](../../bootstrap/finops/README.md), not by
+the main configuration: the budget is the only always-on resource, so it lives
+outside the state that every `demo` cycle creates and destroys (ADR-0025).
+
 ## What it creates
 
 | Budget | Window | Question it answers |
@@ -78,8 +82,8 @@ automatically. This module defines no action.
 
 ## Tags
 
-The budget inherits the provider's `default_tags`
-(`Project` / `Environment` / `ManagedBy`). `aws_budgets_budget` gained a
+The budget inherits the provider's `default_tags`. In `bootstrap/finops` they are
+`Project`, `Environment = shared`, `ManagedBy` and `Stack`. `aws_budgets_budget` gained a
 `tags` argument in AWS provider `5.50.0`; this module requires `>= 6.0`,
 so default tags apply with no per-resource exception needed. See ADR-0004
 for how this contract is linted.

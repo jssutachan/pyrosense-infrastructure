@@ -8,6 +8,7 @@ This folder holds the proof behind every claim in the repository: what was teste
 | [ci-c1-2026-10-23/](ci-c1-2026-10-23/README.md) | The **CI quality gate**: clean code passes, and every one of 15 deliberately broken changes was blocked from merging. Design: [docs/ci-cd.md](../ci-cd.md) | 2026-10-23 |
 | [ci-c2-2026-10-23/](ci-c2-2026-10-23/README.md) | The **pipeline identity**: AWS credentials through OIDC with no stored key, each role only from its own context, and every forbidden action, including privilege escalation, refused by AWS. Design: [docs/ci-cd.md, section 8](../ci-cd.md#8-pipeline-identity-c2) | 2026-10-23 |
 | [ci-c3-2026-11-01/](ci-c3-2026-11-01/README.md) | The **plan in every pull request**: the first CI plan equals the operator's, an invalid value is caught that the static gate cannot see, and a change to the live budget is flagged before merge. Design: [docs/ci-cd.md, section 9](../ci-cd.md#9-plan-in-pull-requests-c3) | 2026-11-01 |
+| [ci-c4-2026-11-03/](ci-c4-2026-11-03/README.md) | The **manual delivery to `demo`**: deployed, tested end to end and destroyed from the pipeline behind an approval, applying only the plan the reviewer read; four missing permissions found and fixed, two of which failed silently. Design: [docs/ci-cd.md, section 10](../ci-cd.md#10-manual-delivery-to-demo-c4) | 2026-11-03 |
 
 The rest of this page covers the end-to-end run.
 
@@ -165,4 +166,4 @@ The account ID, the IoT endpoint prefix, email addresses, user and host names an
 
 ## Reproducing
 
-These tests are not yet packaged for third parties: they were run by the operator against a dedicated demo account. Packaging them as scripts that the CI/CD pipeline can run is planned ([docs/ci-cd.md](../ci-cd.md), stage C4). Until then, every raw output needed to audit the results is in this folder.
+These tests are not yet packaged for third parties: they were run by the operator against a dedicated demo account. Since C4 the pipeline runs a control-plane smoke test after every delivery (`scripts/ci/smoke-demo.sh`, [docs/ci-cd.md, section 10.6](../ci-cd.md#106-verification-after-every-operation)); the data-path tests stay operator steps, because they need the device's private key, which never leaves the operator's machine. Every raw output needed to audit the results is in this folder.

@@ -22,16 +22,25 @@ Terraform state** — the script only receives its path.
 | `iot/` | `known-payload.json` | — (published with `aws iot-data publish`) | — | `RUNBOOK-iot.md` F7 (R4) |
 | `tooling/` | `install-tool.sh` | `.tool-versions`, `checksums.txt` | Download and checksum result | `make` targets, CI jobs |
 | `tooling/` | `check-tool-versions.sh` | `.tool-versions`, installed binaries | `ok` / `MISMATCH` per tool | `make tools` |
-| `tooling/` | `tool-version.sh` | `.tool-versions` | One exact version, or an error | `ci.yml`, `plan.yml` |
+| `tooling/` | `tool-version.sh` | `.tool-versions` | One exact version, or an error | `ci.yml`, `plan.yml`, `deploy.yml` |
 | `tooling/` | `trivy-gate.sh`, `gitleaks-gate.sh`, `guard.sh` | Terraform source, git history, tracked files | Findings as file:line, never the value | `make sec`, `make guard` |
-| `ci/` | `oidc-probe.sh` | An OIDC token from the job | Token claims; whether AWS refused an action | `oidc-probe.yml` |
-| `ci/` | `plan-summary.sh` | Plan JSON (`terraform show -json`) | Resource addresses and actions only | `plan.yml` |
-| `ci/` | `redact.sh` | Any text on stdin | The same text without account ids or emails | `plan.yml` |
+| `ci/` | `oidc-probe.sh` | An OIDC token from the job | Token claims; whether AWS refused an action | `oidc-probe.yml`, `deploy.yml` |
+| `ci/` | `sensitive-tfvars.sh` | Recipient secrets and the CSR variable, from the environment | Nothing but "written (values not shown)" | `plan.yml`, `deploy.yml` |
+| `ci/` | `plan-summary.sh` | Plan JSON (`terraform show -json`) | Resource addresses and actions; for in-place updates, the paths of the changed attributes | `plan.yml`, `deploy.yml` |
+| `ci/` | `plan_guard.py` | Plan JSON | Fingerprint, `changes=true/false`, refused addresses | `deploy.yml` |
+| `ci/` | `smoke-demo.sh` | Terraform outputs, AWS configuration reads | `PASS` / `FAIL` per check, a pending-subscription count | `deploy.yml` (after `apply`) |
+| `ci/` | `redact.sh` | Any text on stdin | The same text without account ids or emails | `plan.yml`, `deploy.yml` |
 
 `tooling/` and `ci/` serve the quality gate and the pipeline; why they exist
 and how they were proven is in [`docs/ci-cd.md`](../docs/ci-cd.md). The
 `plan-summary.sh` rule is the same as #11 above: the plan JSON holds every
-value in clear text, so the script reads only addresses and actions.
+value in clear text, so the script prints addresses, actions and attribute
+paths, and compares values only in memory. `plan_guard.py` (tested in
+`tests/test_plan_guard.py`) decides what a delivery may apply (ADR-0025).
+
+Since C4 the account budget is planned in `bootstrap/finops`, at the same
+address (`module.budgets.aws_budgets_budget.monthly_cost`), so
+`budget-check.jq` reads that stack's saved plan instead of the main one.
 
 The module folders have their own README with usage, rationale and known limitations:
 

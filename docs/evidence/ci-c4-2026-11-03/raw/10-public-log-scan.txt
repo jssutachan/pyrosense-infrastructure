@@ -1,0 +1,5 @@
+# Public logs of every workflow run since 2026-11-02 (deploy, plan, oidc-probe, ci)
+runs scanned: 51
+log lines: 38718
+account id occurrences: 0
+recipient email occurrences: 0

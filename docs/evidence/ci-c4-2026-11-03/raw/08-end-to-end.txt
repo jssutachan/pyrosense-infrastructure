@@ -1,0 +1,20 @@
+# End to end, operator (certificate issued by the pipeline)
+## Publish: 3 sensors x 2 messages
+
+summary: sent=6 failed=0
+puback latency: avg=129 ms max=202 ms -> serial ceiling ~7.8 msg/s
+disconnected
+
+## Publish: 1 critical reading
+summary: sent=1 failed=0
+puback latency: avg=202 ms max=202 ms -> serial ceiling ~5.0 msg/s
+disconnected
+
+## The other side
+lambda Invocations: 6.0
+lambda Errors: 0.0
+dlq messages: 0
+hot table items: 8
+cold objects: 7
+cold prefixes: telemetry
+fire alert email: received (operator)
