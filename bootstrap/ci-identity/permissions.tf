@@ -134,6 +134,18 @@ data "aws_iam_policy_document" "read" {
     ]
     resources = ["*"]
   }
+
+  # The provider refreshes a bucket with HeadBucket, which S3 authorises as
+  # s3:ListBucket. Without it the refresh of a live demo bucket got a 403 that
+  # the provider read as "bucket gone": the plan created the bucket again and
+  # replaced its five configuration resources (C4, caught by plan_guard).
+  # Listing returns object names, never contents; this environment only.
+  statement {
+    sid       = "HeadEnvironmentBuckets"
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
+    resources = [local.scoped.bucket]
+  }
 }
 
 resource "aws_iam_policy" "read" {

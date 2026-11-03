@@ -69,7 +69,11 @@ The plan role gains one trust statement: `sub` = `…:ref:refs/heads/main` and
 - in `apply`: any delete, including the delete half of a replace, except the
   replacement of a resource left tainted by a failed apply;
 - in `destroy`: anything other than delete;
-- in both: any action it does not know (fail closed).
+- in both: any action it does not know (fail closed);
+- in `apply`: creating a resource that is in the state but that the refresh
+  could no longer read (`resource_drift` delete). Either it was deleted
+  outside Terraform or the planning role lacks a read; a person decides.
+  Tainted replacements are allowed and always reported as a warning.
 
 An `apply` that would destroy something is never what a delivery means here;
 that case goes back to the operator.
