@@ -68,7 +68,7 @@ variable "resource_prefix" {
 # ------------------------------------------------------------------------------
 
 variable "ops_recipients" {
-  description = "Platform operators, as { label = email }. Receive budget notifications (module.budgets) and CloudWatch alarm notifications (module.alerting ops topic). One intent, one input: these are the people who run the platform."
+  description = "Platform operators, as { label = email }. Receive CloudWatch alarm notifications (module.alerting ops topic). The account budget notifies its own copy of this map in bootstrap/finops (ADR-0025)."
   type        = map(string)
   sensitive   = true
 }

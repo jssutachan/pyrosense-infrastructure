@@ -14,10 +14,12 @@
 #
 # Two roles, because "see" and "change" are different risks:
 #
-#   <prefix>-ci-plan          pull requests     reads, never writes
-#   <prefix>-ci-apply-<env>   GitHub env <env>  writes, only to <prefix>-<env>-*
-#                             (human approval)  and only IAM roles that carry
-#                                               the workload boundary
+#   <prefix>-ci-plan          pull requests,    reads, never writes
+#                             deploy.yml plan
+#                             job on main
+#   <prefix>-ci-apply-<env>   deploy.yml in     writes, only to <prefix>-<env>-*
+#                             GitHub env <env>  and only IAM roles that carry
+#                             (human approval)  the workload boundary
 #
 # This stack is long-lived and applied by the operator. The pipeline cannot
 # change it: the apply role is denied every IAM action on the pipeline's own
@@ -58,6 +60,11 @@ locals {
   # (repo:<owner>@<id>/<repo>@<id>:<context>). Default for repositories
   # created on or after 2026-07-15; older ones must opt in (README).
   github_sub_prefix = "repo:${var.github_owner}@${var.github_owner_id}/${var.github_repository}@${var.github_repository_id}"
+
+  # The one workflow file, on the one branch, that may deliver to AWS
+  # (ADR-0025). job_workflow_ref uses names, not ids: a rename makes it stop
+  # matching, which fails closed.
+  deploy_workflow_ref = "${var.github_owner}/${var.github_repository}/.github/workflows/deploy.yml@refs/heads/main"
 }
 
 # -----------------------------------------------------------------------------
@@ -86,6 +93,9 @@ resource "aws_iam_openid_connect_provider" "github" {
 #   repository_id        immutable repository id
 #   repository_owner_id  immutable owner id
 #   actor_id             the run was started by an allowed user
+#   job_workflow_ref     the job comes from deploy.yml on main (deploy
+#                        statements only; a pull request runs from a merge
+#                        ref that changes with every pull request)
 # -----------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "plan_trust" {
@@ -106,12 +116,61 @@ data "aws_iam_policy_document" "plan_trust" {
     }
 
     # A job that names an environment gets an environment sub instead, so
-    # the deploy job (environment: demo) can never use this role, and this
-    # role can never be used outside a pull request.
+    # the deliver job (environment: demo) can never use this role.
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_host}:sub"
       values   = ["${local.github_sub_prefix}:pull_request"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_host}:repository_id"
+      values   = [var.github_repository_id]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_host}:repository_owner_id"
+      values   = [var.github_owner_id]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_host}:actor_id"
+      values   = var.github_actor_ids
+    }
+  }
+
+  # The plan job of a delivery (ADR-0025) runs on main without an environment,
+  # so the reviewer can read its plan BEFORE approving. A separate statement,
+  # not a second `sub` value above: only here is the workflow file pinned.
+  statement {
+    sid     = "GitHubDeployPlanOnMain"
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_host}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_host}:sub"
+      values   = ["${local.github_sub_prefix}:ref:refs/heads/main"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_host}:job_workflow_ref"
+      values   = [local.deploy_workflow_ref]
     }
 
     condition {
@@ -160,6 +219,15 @@ data "aws_iam_policy_document" "apply_trust" {
       values   = ["${local.github_sub_prefix}:environment:${var.deploy_environment}"]
     }
 
+    # Any workflow that names the environment gets the sub above; only
+    # deploy.yml on main gets this. A new workflow file cannot write to AWS
+    # without a change to this stack.
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_host}:job_workflow_ref"
+      values   = [local.deploy_workflow_ref]
+    }
+
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_host}:repository_id"
@@ -188,7 +256,7 @@ data "aws_iam_policy_document" "apply_trust" {
 # (role-duration-seconds) and the session ends with the job anyway.
 resource "aws_iam_role" "plan" {
   name                 = local.plan_role_name
-  description          = "PyroSense CI: terraform plan from pull requests. Read-only (ADR-0023)."
+  description          = "PyroSense CI: terraform plan from pull requests and deploy.yml. Read-only (ADR-0023, ADR-0025)."
   assume_role_policy   = data.aws_iam_policy_document.plan_trust.json
   max_session_duration = 3600
 }

@@ -76,25 +76,13 @@ jobs:
 
       # Layer 2 of the plan inputs (layer 1 is the committed
       # demo.tfvars.example). Recipients are secrets: email addresses are PII.
-      # The CSR is public material (a public key and a name), so it is a
-      # variable; it lives outside the repository only because the guard
-      # refuses tracked *.csr files.
+      # Built by the same script as deploy.yml, so both plan the same inputs.
       - name: Build the sensitive input layer
         env:
           OPS_RECIPIENTS: ${{ secrets.DEMO_OPS_RECIPIENTS }}
           FIRE_ALERT_RECIPIENTS: ${{ secrets.DEMO_FIRE_ALERT_RECIPIENTS }}
           FLEET_CLIENT_CSR: ${{ vars.DEMO_IOT_FLEET_CLIENT_CSR }}
-        run: |
-          for name in OPS_RECIPIENTS FIRE_ALERT_RECIPIENTS FLEET_CLIENT_CSR; do
-            [[ -n "${!name}" ]] || { echo "::error::${name} is empty: see docs/ci-cd.md section 9.6"; exit 1; }
-          done
-          printf '%s\n' "$FLEET_CLIENT_CSR" > "$RUNNER_TEMP/fleet-client.csr"
-          jq -n \
-            --argjson ops "$OPS_RECIPIENTS" \
-            --argjson fire "$FIRE_ALERT_RECIPIENTS" \
-            --arg csr "$RUNNER_TEMP/fleet-client.csr" \
-            '{ops_recipients: $ops, fire_alert_recipients: $fire, iot_fleet_client_csr_path: $csr}' \
-            > "$RUNNER_TEMP/sensitive.tfvars.json"
+        run: scripts/ci/sensitive-tfvars.sh "$RUNNER_TEMP"
 
       # Same backend settings as an operator (config/backend.hcl.example);
       # only the bucket name, which carries the account id, is computed here.

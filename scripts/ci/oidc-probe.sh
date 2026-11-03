@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Helpers for .github/workflows/oidc-probe.yml (ADR-0023).
+# Helpers for .github/workflows/oidc-probe.yml (ADR-0023) and for the
+# escalation checks that deploy.yml runs before every delivery (ADR-0025).
 #
 #   oidc-probe.sh claims
 #       Print the claims of a fresh GitHub OIDC token: the values AWS compares
@@ -46,7 +47,8 @@ claims() {
   token="$(fetch_token)"
   echo "::add-mask::${token}"
   decode_payload "$token" | jq '{sub, aud, repository_id, repository_owner_id,
-                                 actor_id, event_name, ref, environment}'
+                                 actor_id, event_name, ref, environment,
+                                 job_workflow_ref}'
 }
 
 expect_denied() {
