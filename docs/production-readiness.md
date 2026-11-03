@@ -168,7 +168,7 @@ Already verified: least-privilege IAM (no wildcards; IAM Access Analyzer clean),
 
 ## 9. Delivery pipeline (CI/CD)
 
-The quality gate runs on every pull request as required checks, with a pinned, hash-verified toolchain (ADR-0022). The pipeline obtains AWS credentials through OIDC, with a read-only plan role and an apply role that cannot escalate (ADR-0023). These are the parts a team deploying this for real would still have to add.
+The quality gate runs on every pull request as required checks, with a pinned, hash-verified toolchain (ADR-0022). The pipeline obtains AWS credentials through OIDC, with a read-only plan role and an apply role that cannot escalate (ADR-0023). It deploys and destroys `demo` behind a required approval, applying only the plan the reviewer read (ADR-0025). These are the parts a team deploying this for real would still have to add.
 
 ### 🔴 One person writes, reviews and merges every change
 - **Today:** the project has a single maintainer. The ruleset requires a pull request and green checks, but zero approvals, because nobody can approve their own pull request.
@@ -179,21 +179,30 @@ The quality gate runs on every pull request as required checks, with a pinned, h
   - "Prevent self-review" on the deployment environments, so the person who triggers a deploy cannot also approve it.
 
 ### 🟠 The pipeline still writes IAM, within a boundary
-- **Today:** the apply role creates the workload roles and their policies. A permissions boundary caps what those roles can ever do, and the role cannot create a role without it (proven in the [C2 evidence](evidence/ci-c2-2026-10-23/README.md)). The demo environment lives in the same account as everything else.
+- **Today:** the apply role creates the workload roles and their policies. A permissions boundary caps what those roles can ever do, and the role cannot create a role without it (proven in the [C2 evidence](evidence/ci-c2-2026-10-23/README.md)), and since C4 it trusts only the deploy workflow file on `main` ([C4 evidence](evidence/ci-c4-2026-11-03/README.md)). The demo environment lives in the same account as everything else.
 - **Why it is a problem:** the boundary limits the damage; it does not remove the capability. A mistake in the boundary itself would apply to every role the pipeline creates.
 - **What production needs:**
   - The workload roles created in a separately applied stack, so the production pipeline needs no IAM write at all and only passes existing roles.
-  - The apply role restricted to the deploy workflow file (`job_workflow_ref` in the trust policy).
   - One AWS account per environment (AWS Organizations), so a demo pipeline can never reach production resources even by mistake.
 
 ### 🟢 Two scopes are wider than the project
 - **Today:** IoT certificate actions cover the whole account and region, because certificates have random ids and cannot be tagged through Terraform. KMS keys are scoped by tag, and the apply role could tag another key of the account into scope.
 - **What production needs:** a dedicated account per environment makes both scopes equal to the project. In a shared account, deny `kms:TagResource` on keys outside the project.
 
+### 🟠 Read permissions were completed by failing deliveries
+- **Today:** the plan role's read list came from CloudTrail and was exercised against an empty state until C4. The first deliveries found two reads that failed silently: a 403 on `HeadBucket` read as "bucket deleted", and a function environment that could not be decrypted, read as "variables removed". The policy gate and the reviewer caught both before anything was applied ([C4 evidence](evidence/ci-c4-2026-11-03/README.md)).
+- **Why it is a problem:** a missing read does not always fail. It can become a plan that replaces or rewrites live resources.
+- **What production needs:**
+  - Exercise every pipeline role against a live, non-production copy of the environment before trusting it with production, and require its plan to equal an administrator's plan of the same state.
+  - Keep the gate that refuses to recreate a resource the refresh lost.
+  - Alert on `AccessDenied` from the pipeline roles in CloudTrail.
+
 ### 🟠 The plan in a pull request is a summary, not a reviewed artifact
 - **Today:** every pull request runs `terraform plan` against `demo` and
-  shows resource addresses and actions (ADR-0024). The plan file is
-  discarded, because it holds sensitive values in clear text and artifacts
+  shows resource addresses, actions and, for in-place updates, the names of
+  the changed attributes, never their values (ADR-0024). Before a delivery
+  the reviewer approves that same summary, and only a plan with the same
+  fingerprint can be applied (ADR-0025). The plan file is discarded, because it holds sensitive values in clear text and artifacts
   of a public repository are downloadable by anyone signed in. `demo` is
   usually destroyed, so most plans show the whole stack as "create".
 - **What production needs:**

@@ -1,7 +1,7 @@
-# Tests — PyroSense ingest Lambda
+# Tests — PyroSense
 
-Pytest suite for the ingest core (`src/ingest_lambda/`). **91 tests, ~99%
-branch coverage.** Everything runs against an **in-memory AWS** (moto): no
+Pytest suite for the ingest core (`src/ingest_lambda/`) and the delivery
+plan guard (`scripts/ci/plan_guard.py`). **114 tests, ~99% branch coverage.** Everything runs against an **in-memory AWS** (moto): no
 account, no credentials, no cost.
 
 ---
@@ -50,6 +50,7 @@ Useful variations:
 | `test_alerts.py` | `alerts.py` | Suppression slot, self-contained SNS body |
 | `test_handler.py` | `handler.py` | End-to-end pipeline, partial batch responses |
 | `test_error_paths.py` | cross-cutting | Transient-vs-permanent error classification |
+| `test_plan_guard.py` | `scripts/ci/plan_guard.py` | Plan fingerprint, what `apply` and `destroy` may do, lost resources, nothing printed but addresses |
 
 ---
 

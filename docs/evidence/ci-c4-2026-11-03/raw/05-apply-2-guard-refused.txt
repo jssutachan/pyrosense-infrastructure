@@ -1,0 +1,10 @@
+# Apply 2 (run 41671689559): plan_guard refuses before any approval
+job preflight: success
+job plan: failure
+job deliver: skipped
+
+##[error]plan_guard: module.storage.aws_s3_bucket_lifecycle_configuration.cold: delete/create is not allowed in apply
+##[error]plan_guard: module.storage.aws_s3_bucket_policy.cold: delete/create is not allowed in apply
+##[error]plan_guard: module.storage.aws_s3_bucket_public_access_block.cold: delete/create is not allowed in apply
+##[error]plan_guard: module.storage.aws_s3_bucket_server_side_encryption_configuration.cold: delete/create is not allowed in apply
+##[error]plan_guard: module.storage.aws_s3_bucket_versioning.cold: delete/create is not allowed in apply

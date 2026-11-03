@@ -1,0 +1,27 @@
+# Successful delivery (run 41679207525)
+job preflight: success  2026-11-03T16:56:15Z -> 2026-11-03T16:56:18Z
+job plan: success  2026-11-03T16:56:22Z -> 2026-11-03T16:56:50Z
+job deliver: success  2026-11-03T16:57:22Z -> 2026-11-03T16:59:12Z
+
+  "job_workflow_ref": "<OWNER>/pyrosense-infrastructure/.github/workflows/deploy.yml@refs/heads/main"
+ok: apply role creates an unbounded role -> refused by AWS
+ok: apply role creates a prod queue -> refused by AWS
+ok: apply role tags its own role -> refused by AWS
+plan matches the approved one
+Apply complete! Resources: 2 added, 0 changed, 0 destroyed.
+converged: no changes after apply
+PASS  ingest function active and updated
+PASS  queue -> function mapping enabled
+PASS  fleet client certificate active
+PASS  fleet client policy attached to the certificate
+PASS  telemetry topic rule enabled
+PASS  ingest queue redrives to the DLQ
+PASS  DLQ empty
+PASS  pipeline key enabled, rotation on
+PASS  hot table active, encrypted
+PASS  cold bucket encrypted with KMS
+PASS  every observability alarm exists
+PASS  fire-alert topic has subscriptions
+PASS  ops topic has subscriptions
+INFO  0 email subscription(s) pending confirmation (scripts/alerting/sns-confirm.sh)
+all smoke checks passed

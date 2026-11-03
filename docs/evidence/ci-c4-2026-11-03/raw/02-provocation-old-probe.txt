@@ -1,0 +1,24 @@
+# Provocation: the old oidc-probe apply-role job on main, approved in demo
+run 41665006820
+conclusion: failure  created: 2026-11-03T15:32:50Z
+
+## Claims (the token itself is masked)
+  "sub": "repo:<OWNER>@<OWNER_ID>/pyrosense-infrastructure@<REPO_ID>:environment:demo",
+  "event_name": "workflow_dispatch",
+  "ref": "refs/heads/main",
+  "environment": "demo"
+
+## Refusal
+##[error]Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity
+Retry AssumeRole: attempt 1 of 12 failed: Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity. Retrying after 29ms.
+Retry AssumeRole: attempt 10 of 12 failed: Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity. Retrying after 21629ms.
+Retry AssumeRole: attempt 11 of 12 failed: Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity. Retrying after 11970ms.
+Retry AssumeRole: attempt 12 of 12 failed: Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity. Retrying after 39703ms.
+Retry AssumeRole: attempt 2 of 12 failed: Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity. Retrying after 33ms.
+Retry AssumeRole: attempt 3 of 12 failed: Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity. Retrying after 93ms.
+Retry AssumeRole: attempt 4 of 12 failed: Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity. Retrying after 266ms.
+Retry AssumeRole: attempt 5 of 12 failed: Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity. Retrying after 288ms.
+Retry AssumeRole: attempt 6 of 12 failed: Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity. Retrying after 389ms.
+Retry AssumeRole: attempt 7 of 12 failed: Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity. Retrying after 1624ms.
+Retry AssumeRole: attempt 8 of 12 failed: Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity. Retrying after 5836ms.
+Retry AssumeRole: attempt 9 of 12 failed: Could not assume role with OIDC: Not authorized to perform sts:AssumeRoleWithWebIdentity. Retrying after 8082ms.

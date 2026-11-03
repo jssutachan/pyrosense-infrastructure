@@ -1,16 +1,17 @@
 # ADR-0025: Manual delivery to `demo` from the pipeline
 
-- **Status:** Proposed
-- **Date:** 2026-11-01
+- **Status:** Accepted
+- **Date:** 2026-11-01 (proposed) · 2026-11-03 (accepted, after the first deliveries)
 - **Related:** ADR-0002 (design for production, deploy for demo), ADR-0003 (budget),
-  ADR-0015 (email alerts), ADR-0017 (device identity), ADR-0023 (pipeline identity),
-  ADR-0024 (plan in pull requests)
+  ADR-0010 (single CMK), ADR-0015 (email alerts), ADR-0017 (device identity),
+  ADR-0023 (pipeline identity), ADR-0024 (plan in pull requests)
+- **Evidence:** [docs/evidence/ci-c4-2026-11-03/](../evidence/ci-c4-2026-11-03/README.md)
 
 ## Context
 
-C1 to C3 verify every change; the operator still deploys and destroys `demo`
+C1 to C3 verify every change; the operator still deployed and destroyed `demo`
 from a laptop with personal credentials. C4 moves that to the pipeline, with
-the apply role built in C2, whose write permissions have never been exercised.
+the apply role built in C2, whose write permissions had never been exercised.
 
 Constraints:
 - `demo` is ephemeral: each cycle creates about 50 resources, tests them and
@@ -122,23 +123,43 @@ step after the subscriptions are confirmed.
 ### D8. Email confirmation stays human
 
 The smoke test reports how many subscriptions are pending; the operator
-confirms each with `scripts/alerting/sns-confirm.sh`. Terraform cannot confirm
-an email subscription, and a pending one is not a failed apply (ADR-0015).
+confirms each one. Terraform cannot confirm an email subscription, and a
+pending one is not a failed apply (ADR-0015).
 
 ### D9. The same log discipline as C3
 
 Command output goes to files on the runner. The log shows only the plan
-summary (addresses and actions), the `Apply complete!` line, the guard's
-addresses and the smoke test's PASS/FAIL lines. On failure, the last lines go
-through `scripts/ci/redact.sh`. Nothing is uploaded; every plan file is deleted
-with `if: always()`. The certificate PEM is a sensitive output and is never
-read by the workflow.
+summary (addresses, actions and, for in-place updates, the names of the
+changed attributes), the `Apply complete!` line, the guard's addresses and the
+smoke test's PASS/FAIL lines. On failure, the last lines go through
+`scripts/ci/redact.sh`. Nothing is uploaded; every plan file is deleted with
+`if: always()`. The certificate PEM is a sensitive output and is never read
+by the workflow.
 
 ### D10. A missing permission is a reasoned line, never a wildcard
 
-The first deliveries will exercise every write of the apply role. Each
-`AccessDenied` is fixed in `bootstrap/ci-identity` with the exact action, the
-tightest resource scope that works, and a comment saying why.
+The first deliveries exercise every write of the apply role and, for the
+first time, every read of the plan role against live resources. Each failure
+is fixed in `bootstrap/ci-identity` with the exact action, the tightest
+resource scope that works, and a comment saying why.
+
+## Validation (2026-11-03)
+
+The first deliveries found four missing permissions. Two failed loudly; two
+failed silently and were caught by the policy gate and by the reviewer.
+
+| Found | How it showed | Fix |
+|---|---|---|
+| Apply role: `kms:CreateAlias` on the key | `AccessDenied`, apply 1 | alias actions in `ManageProjectKeys`; KMS authorises alias calls on the alias **and** on the key |
+| Apply role: `lambda:TagResource` on the event source mapping | `AccessDenied`, apply 1 | `TagEnvironmentEventSourcesOnCreate`, scoped by the project and environment request tags |
+| Plan role: `s3:ListBucket` (HeadBucket) on a live bucket | silent: the provider read the 403 as a deleted bucket, planned it as create and its five configuration resources as replace; `plan_guard` refused before any approval | `HeadEnvironmentBuckets` (this environment's buckets only); D3 gained the lost-resource rule |
+| Plan role: `kms:Decrypt` of the function's environment through Lambda (ADR-0010 CMK) | silent: the refresh returned no variables, every plan updated the function; the reviewer rejected the plan because it differed from the operator's | `ReadEnvironmentFunctionConfiguration`: only via `lambda.<region>.amazonaws.com`, only for this environment's functions (`aws:lambda:FunctionArn` context), only on project keys |
+
+After the fixes, the pipeline's plan was identical to the operator's local plan
+of the same state, the apply converged, the 13 smoke checks passed, an
+operator end-to-end test with the certificate issued by the pipeline reached
+DynamoDB, S3 and the fire-alert mailbox, and the destroy left the main state
+empty with the budget untouched.
 
 ## Consequences
 
@@ -151,7 +172,8 @@ tightest resource scope that works, and a comment saying why.
 - Neither pipeline role reads a budget any more, so `budgets:ViewBudget` and
   `budgets:ListTagsForResource` leave their shared read policy.
 - The plan role is trusted by two contexts (pull requests and the deploy
-  plan job), both read-only.
+  plan job), both read-only. Its read policy has one declared exception to
+  "no decryption": the function's configuration, through Lambda only.
 
 ## Known limitations
 
@@ -162,3 +184,9 @@ tightest resource scope that works, and a comment saying why.
   control on that content.
 - The smoke test checks configuration, not behaviour; behaviour is the
   operator's end-to-end test.
+- The lost-resource rule of D3 is proven by unit tests only: once the
+  permission was fixed, the situation could no longer be produced on AWS.
+- The pre-destroy drift report cannot tell attributes AWS updates by itself
+  (an event source mapping after processing messages) from a manual change.
+- A run waiting for approval holds the delivery queue: a newer dispatch waits
+  behind it, and a third one cancels the waiting second.
