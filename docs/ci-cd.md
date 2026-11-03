@@ -689,6 +689,7 @@ jobs, and its tests are part of the `python` check:
 |---|---|---|
 | `apply` | create, update, no-op; replacing a resource a failed apply left tainted | any other delete or replace |
 | `destroy` | delete, no-op | anything else |
+| `apply` | | creating a resource that is in the state but the refresh could no longer read (deleted outside Terraform, or a read permission missing) |
 | both | | an action the guard does not know (fail closed) |
 
 ### 10.4 Why the budget left the main state

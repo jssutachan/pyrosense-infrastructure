@@ -165,3 +165,51 @@ def test_errors_never_print_values(tmp_path: Path, capsys: pytest.CaptureFixture
     assert _run(tmp_path, {"resource_changes": [entry]}, "--operation", "apply") == 1
     captured = capsys.readouterr()
     assert "someone@example.org" not in captured.out + captured.err
+
+
+def test_apply_refuses_recreating_a_resource_the_refresh_lost(tmp_path: Path) -> None:
+    plan = {
+        "resource_drift": [
+            {
+                "address": "module.storage.aws_s3_bucket.cold",
+                "mode": "managed",
+                "change": {"actions": ["delete"]},
+            }
+        ],
+        "resource_changes": [
+            _rc("module.storage.aws_s3_bucket.cold", "create"),
+            _rc("module.storage.aws_s3_bucket_versioning.cold", "delete", "create"),
+        ],
+    }
+    assert _run(tmp_path, plan, "--operation", "apply") == 1
+    assert pg.violations("apply", pg.managed_changes(plan), pg.lost_addresses(plan))[0].startswith(
+        "module.storage.aws_s3_bucket.cold: in the state but no longer readable"
+    )
+
+
+def test_drift_other_than_delete_is_not_lost() -> None:
+    plan = {
+        "resource_drift": [
+            {"address": "module.alerting.aws_sns_topic.ops", "change": {"actions": ["update"]}}
+        ]
+    }
+    assert pg.lost_addresses(plan) == frozenset()
+
+
+def test_tainted_replacement_is_reported(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    plan = {
+        "resource_changes": [
+            _rc(
+                "module.ingest.aws_lambda_function.this",
+                "delete",
+                "create",
+                reason=pg.TAINTED,
+            )
+        ]
+    }
+    assert _run(tmp_path, plan, "--operation", "apply") == 0
+    assert (
+        "::warning::plan_guard: module.ingest.aws_lambda_function.this" in capsys.readouterr().err
+    )
