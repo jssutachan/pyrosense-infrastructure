@@ -38,7 +38,7 @@ The complete system was deployed from nothing and tested for several hours on AW
 | Injected failures: invalid payload, consumer outage, broken permission, lost alert | 4 of 4 detected and paged to the operator · no data lost |
 | Security probes: other environment, impersonated device, unencrypted HTTP | 3 of 3 denied · 9 of 9 data stores encrypted with a customer-managed key |
 | Monitoring | 10 of 10 alarms delivered their notification · a leftover from a test was caught by the drift check and fixed |
-| Code quality | 95 tests · Terraform validate, TFLint, Trivy and gitleaks clean on the tested commit |
+| Code quality | 114 tests · Terraform validate, TFLint, Trivy and gitleaks clean on the tested commit |
 | CI quality gate | 15 of 15 deliberately broken pull requests blocked from merging, each by the expected check · 0 sensitive values in the public logs ([evidence](docs/evidence/ci-c1-2026-10-23/README.md)) |
 | Terraform plan in pull requests | every pull request planned against real AWS with a read-only role · an invalid value caught that the static gate cannot see · a change to the always-on budget flagged before merge · 0 sensitive values in the public logs ([evidence](docs/evidence/ci-c3-2026-11-01/README.md)) |
 | Pipeline identity (OIDC) | AWS credentials with no stored key, each role only from its own context · 5 of 5 forbidden actions refused by AWS, including creating an IAM role without the permissions boundary · 0 sensitive values in the public logs ([evidence](docs/evidence/ci-c2-2026-10-23/README.md)) |
@@ -251,7 +251,7 @@ terraform apply tfplan
 
 | Area | Status |
 |---|---|
-| Lambda consumer (Python) | ✅ Complete · 95 tests |
+| Lambda consumer (Python) | ✅ Complete · 114 tests |
 | CI quality gate (GitHub Actions) | ✅ Full static gate (Python, Terraform, security, hygiene) as required checks on every pull request · [proven](docs/evidence/ci-c1-2026-10-23/README.md) |
 | Remote state backend · cost guardrail | ✅ Deployed |
 | Encryption · messaging · storage · alerting · IoT · ingest · observability | ✅ Each verified in its own deploy/destroy cycle |
